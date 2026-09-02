@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePersonal } from "@/lib/data/current-user";
 import { revalidatePath } from "next/cache";
+import { TIPOS_NOTIFICACAO_PERSONAL } from "@/lib/constantes";
 
 export async function atualizarPerfilPersonal(formData: FormData) {
   const { personal } = await requirePersonal();
@@ -38,5 +39,27 @@ export async function atualizarFotoPersonal(formData: FormData) {
   const supabase = await createClient();
   await supabase.from("personals").update({ foto_url: pub.publicUrl }).eq("id", personal.id);
 
+  revalidatePath("/configuracoes");
+}
+
+export async function atualizarPreferenciasNotificacaoPersonal(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+
+  const preferencias: Record<string, boolean> = {};
+  for (const { tipo } of TIPOS_NOTIFICACAO_PERSONAL) {
+    preferencias[tipo] = formData.get(`pref_${tipo}`) === "on";
+  }
+
+  await supabase.from("personals").update({ notificacoes_preferencias: preferencias }).eq("id", personal.id);
+  revalidatePath("/configuracoes");
+}
+
+export async function atualizarResumoDiario(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+
+  const ativo = formData.get("resumoDiarioAtivo") === "on";
+  await supabase.from("personals").update({ resumo_diario_ativo: ativo }).eq("id", personal.id);
   revalidatePath("/configuracoes");
 }

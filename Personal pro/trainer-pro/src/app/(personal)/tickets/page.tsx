@@ -1,5 +1,6 @@
 import { requirePersonal } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
+import { getRespostasRapidas } from "@/lib/data/respostas-rapidas";
 import { TicketCard } from "@/components/ticket-card";
 import Link from "next/link";
 import type { Ticket } from "@/lib/types";
@@ -13,16 +14,23 @@ export default async function TicketsPage({
   const { status = "aberto" } = await searchParams;
   const supabase = await createClient();
 
-  const { data: alunos } = await supabase.from("alunos").select("id, nome").eq("personal_id", personal.id);
-  const nomesPorId = new Map((alunos ?? []).map((a) => [a.id, a.nome]));
-  const alunoIds = (alunos ?? []).map((a) => a.id);
-
+  // filtra por personal_id direto na tabela relacionada (join !inner) em vez
+  // de buscar os ids dos alunos numa query separada antes
   const { data: tickets } = await supabase
     .from("tickets")
-    .select("*")
-    .in("aluno_id", alunoIds.length ? alunoIds : ["00000000-0000-0000-0000-000000000000"])
+    .select("*, alunos!inner(nome, personal_id)")
+    .eq("alunos.personal_id", personal.id)
     .eq("status", status)
     .order("created_at", { ascending: false });
+
+  const respostasRapidas = status === "aberto" ? await getRespostasRapidas(personal.id) : [];
+
+  const nomesPorId = new Map(
+    ((tickets ?? []) as unknown as { aluno_id: string; alunos: { nome: string } }[]).map((t) => [
+      t.aluno_id,
+      t.alunos.nome,
+    ])
+  );
 
   return (
     <div className="space-y-4 p-4 md:p-0">
@@ -42,7 +50,7 @@ export default async function TicketsPage({
 
       <div className="space-y-3">
         {((tickets as Ticket[] | null) ?? []).map((t) => (
-          <TicketCard key={t.id} ticket={t} alunoNome={nomesPorId.get(t.aluno_id)} />
+          <TicketCard key={t.id} ticket={t} alunoNome={nomesPorId.get(t.aluno_id)} respostasRapidas={respostasRapidas} />
         ))}
         {(!tickets || tickets.length === 0) && (
           <p className="text-sm text-muted">Nenhum ticket {status === "aberto" ? "aberto" : "resolvido"}.</p>

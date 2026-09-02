@@ -1,7 +1,8 @@
 import { requireAluno } from "@/lib/data/current-user";
-import { getExerciciosDaAula } from "@/lib/data/aluno";
+import { getExerciciosDaAula, getInicioTreinoHoje } from "@/lib/data/aluno";
 import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/nav/top-bar";
+import { TreinoTimer } from "@/components/treino-timer";
 import { Card } from "@/components/ui/card";
 import { ChevronRight, PlayCircle } from "lucide-react";
 import Link from "next/link";
@@ -12,18 +13,21 @@ export default async function AulaPage({
 }: {
   params: Promise<{ aulaId: string }>;
 }) {
-  await requireAluno();
+  const { aluno } = await requireAluno();
   const { aulaId } = await params;
   const supabase = await createClient();
 
   const { data: aula } = await supabase.from("aulas").select("*").eq("id", aulaId).maybeSingle();
   if (!aula) notFound();
 
-  const exercicios = await getExerciciosDaAula(aulaId);
+  const [exercicios, inicioIso] = await Promise.all([
+    getExerciciosDaAula(aulaId),
+    getInicioTreinoHoje(aluno.id, aulaId),
+  ]);
 
   return (
     <div>
-      <TopBar title={aula.nome} back="/treino" />
+      <TopBar title={aula.nome} back="/treino" action={inicioIso ? <TreinoTimer inicioIso={inicioIso} /> : undefined} />
       <div className="space-y-3 p-4">
         {exercicios.map((ex, i) => (
           <Link key={ex.id} href={`/treino/${aulaId}/exercicio/${ex.id}`}>

@@ -1,6 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { validarSenha } from "@/lib/password";
 import { redirect } from "next/navigation";
 
 export type LoginState = { error?: string } | undefined;
@@ -47,18 +49,29 @@ export async function solicitarRecuperacaoSenha(
   _prevState: EsqueciSenhaState,
   formData: FormData
 ): Promise<EsqueciSenhaState> {
-  const email = String(formData.get("email") || "").trim();
+  const email = String(formData.get("email") || "").trim().toLowerCase();
   if (!email) return { error: "Informe seu e-mail." };
+
+  // App privado (personal + alunos convidados por ele) — aqui preferimos deixar
+  // explícito se o e-mail tem conta ou não, em vez da ambiguidade padrão usada
+  // em apps públicos (decisão do produto, não é o comportamento mais comum).
+  const admin = createAdminClient();
+  const [{ data: personal }, { data: aluno }] = await Promise.all([
+    admin.from("personals").select("id").ilike("email", email).maybeSingle(),
+    admin.from("alunos").select("id").ilike("email", email).not("auth_user_id", "is", null).maybeSingle(),
+  ]);
+
+  if (!personal && !aluno) {
+    return { error: "Não encontramos nenhuma conta cadastrada com este e-mail." };
+  }
 
   const supabase = await createClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
 
   await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${siteUrl}/auth/confirm?next=/redefinir-senha`,
+    redirectTo: `${siteUrl}/auth/callback?next=/redefinir-senha`,
   });
 
-  // sempre "enviado", mesmo se o e-mail não existir — não confirma pra quem
-  // está tentando descobrir e-mails cadastrados
   return { enviado: true };
 }
 
@@ -71,7 +84,8 @@ export async function redefinirSenha(
   const senha = String(formData.get("senha") || "");
   const confirmarSenha = String(formData.get("confirmarSenha") || "");
 
-  if (senha.length < 8) return { error: "A senha precisa ter pelo menos 8 caracteres." };
+  const erroSenha = validarSenha(senha);
+  if (erroSenha) return { error: erroSenha };
   if (senha !== confirmarSenha) return { error: "As senhas não coincidem." };
 
   const supabase = await createClient();

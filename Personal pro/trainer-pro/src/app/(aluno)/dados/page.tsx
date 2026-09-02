@@ -3,6 +3,7 @@ import { TopBar } from "@/components/nav/top-bar";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { revogarConsentimentoSaude, solicitarExclusaoConta } from "@/app/actions/lgpd";
+import { PRAZO_EXCLUSAO_DIAS } from "@/lib/constantes";
 import { Download, ShieldCheck, ShieldOff, Trash2 } from "lucide-react";
 import { formatDataBR } from "@/lib/status";
 
@@ -64,8 +65,9 @@ export default async function MeusDadosPage() {
             </a>
             {aluno.exclusao_solicitada_em ? (
               <p className="rounded-xl bg-warning-soft px-3 py-2.5 text-xs text-warning">
-                Exclusão solicitada em {formatDataBR(aluno.exclusao_solicitada_em)} — seu
-                personal foi avisado.
+                Exclusão solicitada em {formatDataBR(aluno.exclusao_solicitada_em)} — seu personal foi
+                avisado. Prazo para exclusão efetiva: {PRAZO_EXCLUSAO_DIAS} dias, salvo contato em
+                contrário.
               </p>
             ) : (
               <form action={solicitarExclusaoConta}>

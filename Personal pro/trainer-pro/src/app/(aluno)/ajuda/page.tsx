@@ -2,6 +2,8 @@ import { requireAluno } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/nav/top-bar";
 import { Card, CardTitle } from "@/components/ui/card";
+import { SuporteForm } from "@/components/suporte-form";
+import { abrirTicketSuporteAluno } from "@/app/actions/suporte";
 import { buildWhatsappLink } from "@/lib/whatsapp";
 import { MessageCircle, Phone } from "lucide-react";
 
@@ -65,6 +67,15 @@ export default async function AjudaPage() {
             Contato administrativo: {personal.email}
           </Card>
         )}
+
+        <Card>
+          <CardTitle className="mb-1">Encontrou um problema no app?</CardTitle>
+          <p className="mb-3 text-sm text-muted">
+            Isso é diferente do relato de dor — fica registrado só aqui dentro, para quem cuida do
+            Trainer Pro corrigir ou avaliar.
+          </p>
+          <SuporteForm action={abrirTicketSuporteAluno} />
+        </Card>
       </div>
     </div>
   );

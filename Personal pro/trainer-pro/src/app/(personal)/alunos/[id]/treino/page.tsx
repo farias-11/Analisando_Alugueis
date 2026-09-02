@@ -1,25 +1,25 @@
 import { requirePersonal } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
-import { getAulasDoCiclo, getCicloAtivo, getExerciciosDaAula } from "@/lib/data/aluno";
+import { getAulasDoCiclo, getCicloAtivo, getExerciciosDaAula, getSugestoesRenovacao } from "@/lib/data/aluno";
 import { getContextoAluno } from "@/lib/data/contexto";
 import { notFound } from "next/navigation";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ContextoAlunoPanel } from "@/components/contexto-aluno-panel";
+import { RealtimeTreinoSync } from "@/components/realtime-treino-sync";
 import { TopBar } from "@/components/nav/top-bar";
+import { AdicionarExercicioSection } from "@/components/adicionar-exercicio-section";
+import { ExercicioAulaRow } from "@/components/exercicio-aula-row";
 import {
   atualizarDuracaoCiclo,
   criarAula,
   criarCiclo,
   duplicarTreinoDeOutroAluno,
-  renovarCiclo,
-  adicionarExercicioAula,
   removerAula,
-  removerExercicioAula,
   moverAula,
-  moverExercicioAula,
   atualizarDiasSemanaAula,
 } from "@/app/actions/treinos";
+import { RenovarCicloModal } from "@/components/renovar-ciclo-modal";
 import { Badge } from "@/components/ui/badge";
 import { DiasSemanaPicker } from "@/components/dias-semana-picker";
 import { statusCiclo } from "@/lib/status";
@@ -57,10 +57,17 @@ export default async function EditorTreinoPage({
     aulas.map(async (a) => ({ aula: a, exercicios: await getExerciciosDaAula(a.id) }))
   );
   const biblioteca = exercicios.data ?? [];
+  // exercícios com ticket de dor nos últimos 30 dias — pra alertar o personal
+  // no momento em que for adicionar (ou já tiver) um desses de novo (item C19)
+  const nomesComTicketRecente = new Set(contexto.ticketsRecentes.map((t) => t.exercicioNome));
+  const statusCicloAtual = ciclo ? statusCiclo(ciclo.data_fim) : null;
+  const sugestoesRenovacao =
+    ciclo && statusCicloAtual !== "ativo" ? await getSugestoesRenovacao(ciclo.id) : [];
 
   return (
     <div>
       <TopBar title={`Editor de treino — ${aluno.nome}`} back={`/alunos/${alunoId}?aba=treino`} />
+      <RealtimeTreinoSync cicloId={ciclo?.id ?? null} aulaIds={aulas.map((a) => a.id)} />
 
       <div className="grid gap-4 p-4 md:grid-cols-[1fr_320px] md:p-6">
         <div className="space-y-4">
@@ -115,13 +122,7 @@ export default async function EditorTreinoPage({
                         </p>
                       </div>
                     </div>
-                    <form action={renovarCiclo}>
-                      <input type="hidden" name="alunoId" value={alunoId} />
-                      <input type="hidden" name="cicloId" value={ciclo.id} />
-                      <Button type="submit" size="sm">
-                        Renovar ciclo
-                      </Button>
-                    </form>
+                    <RenovarCicloModal alunoId={alunoId} cicloId={ciclo.id} sugestoes={sugestoesRenovacao} />
                   </Card>
                 );
               })()}
@@ -202,84 +203,25 @@ export default async function EditorTreinoPage({
 
                   <div className="space-y-2">
                     {exs.map((ex, exIndex) => (
-                      <div
+                      <ExercicioAulaRow
                         key={ex.id}
-                        className="flex items-center justify-between rounded-lg bg-neutral-soft px-3 py-2 text-sm"
-                      >
-                        <span>{ex.exercicio.nome}</span>
-                        <div className="flex items-center gap-1.5 text-muted">
-                          <span className="mr-1">
-                            {ex.series}x{ex.repeticoes} · {ex.carga_inicial ?? "—"}kg ·{" "}
-                            {ex.descanso_seg}s
-                          </span>
-                          <form action={moverExercicioAula}>
-                            <input type="hidden" name="alunoId" value={alunoId} />
-                            <input type="hidden" name="aulaId" value={aula.id} />
-                            <input type="hidden" name="aulaExercicioId" value={ex.id} />
-                            <input type="hidden" name="direcao" value="up" />
-                            <button
-                              type="submit"
-                              disabled={exIndex === 0}
-                              className="text-muted-2 hover:text-foreground disabled:opacity-30"
-                            >
-                              <ChevronUp size={14} />
-                            </button>
-                          </form>
-                          <form action={moverExercicioAula}>
-                            <input type="hidden" name="alunoId" value={alunoId} />
-                            <input type="hidden" name="aulaId" value={aula.id} />
-                            <input type="hidden" name="aulaExercicioId" value={ex.id} />
-                            <input type="hidden" name="direcao" value="down" />
-                            <button
-                              type="submit"
-                              disabled={exIndex === exs.length - 1}
-                              className="text-muted-2 hover:text-foreground disabled:opacity-30"
-                            >
-                              <ChevronDown size={14} />
-                            </button>
-                          </form>
-                          <form action={removerExercicioAula}>
-                            <input type="hidden" name="alunoId" value={alunoId} />
-                            <input type="hidden" name="aulaExercicioId" value={ex.id} />
-                            <button type="submit" className="text-muted-2 hover:text-danger">
-                              <Trash2 size={14} />
-                            </button>
-                          </form>
-                        </div>
-                      </div>
+                        ex={ex}
+                        alunoId={alunoId}
+                        aulaId={aula.id}
+                        biblioteca={biblioteca}
+                        nomesComTicketRecente={Array.from(nomesComTicketRecente)}
+                        ehPrimeiro={exIndex === 0}
+                        ehUltimo={exIndex === exs.length - 1}
+                      />
                     ))}
                   </div>
 
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-sm font-medium text-primary">
-                      + Adicionar exercício
-                    </summary>
-                    <form action={adicionarExercicioAula} className="mt-2 space-y-2 rounded-lg border border-border p-3">
-                      <input type="hidden" name="alunoId" value={alunoId} />
-                      <input type="hidden" name="aulaId" value={aula.id} />
-                      <select
-                        name="exercicioId"
-                        required
-                        className="h-9 w-full rounded-lg border border-border px-2 text-sm"
-                      >
-                        <option value="">Selecione um exercício</option>
-                        {biblioteca.map((ex) => (
-                          <option key={ex.id} value={ex.id}>
-                            {ex.nome} ({ex.grupo_muscular})
-                          </option>
-                        ))}
-                      </select>
-                      <div className="grid grid-cols-4 gap-2">
-                        <input name="series" type="number" defaultValue={3} placeholder="Séries" className="h-9 rounded-lg border border-border px-2 text-sm" />
-                        <input name="repeticoes" defaultValue="10-12" placeholder="Reps" className="h-9 rounded-lg border border-border px-2 text-sm" />
-                        <input name="cargaInicial" type="number" step="0.5" placeholder="Carga" className="h-9 rounded-lg border border-border px-2 text-sm" />
-                        <input name="descansoSeg" type="number" defaultValue={60} placeholder="Descanso" className="h-9 rounded-lg border border-border px-2 text-sm" />
-                      </div>
-                      <Button type="submit" size="sm" className="w-full">
-                        Adicionar
-                      </Button>
-                    </form>
-                  </details>
+                  <AdicionarExercicioSection
+                    alunoId={alunoId}
+                    aulaId={aula.id}
+                    biblioteca={biblioteca}
+                    nomesComTicketRecente={Array.from(nomesComTicketRecente)}
+                  />
                 </Card>
               ))}
 

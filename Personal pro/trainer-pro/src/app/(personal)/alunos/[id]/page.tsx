@@ -48,9 +48,9 @@ export default async function FichaAlunoPage({
               </span>
             )}
           </div>
-          <div className="flex-1">
-            <p className="text-base font-semibold">{alunoTyped.nome}</p>
-            <p className="text-sm text-muted">{alunoTyped.email}</p>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-semibold">{alunoTyped.nome}</p>
+            <p className="truncate text-sm text-muted">{alunoTyped.email}</p>
           </div>
           <Badge status={alunoTyped.status_convite === "pendente" ? "pendente" : alunoTyped.status} />
         </Card>
@@ -59,8 +59,10 @@ export default async function FichaAlunoPage({
       <TabNav alunoId={id} aba={aba} />
 
       <div className="space-y-4 p-4 md:p-0 md:pt-4">
-        {aba === "geral" && <GeralTab aluno={alunoTyped} />}
-        {aba === "medidas" && <MedidasTab alunoId={id} />}
+        {aba === "geral" && <GeralTab aluno={alunoTyped} personalNome={personal.nome} />}
+        {aba === "medidas" && (
+          <MedidasTab alunoId={id} consentimentoAceito={alunoTyped.consentimento_saude_aceito} />
+        )}
         {aba === "avaliacoes" && <AvaliacoesTab aluno={alunoTyped} />}
         {aba === "treino" && <TreinoTab alunoId={id} />}
         {aba === "historico" && <HistoricoTab alunoId={id} />}

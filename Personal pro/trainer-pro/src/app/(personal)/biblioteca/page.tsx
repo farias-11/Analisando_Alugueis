@@ -2,9 +2,10 @@ import { requirePersonal } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { NovoExercicioToggle } from "./novo-exercicio-toggle";
-import { excluirExercicio } from "@/app/actions/exercicios";
+import { Button } from "@/components/ui/button";
+import { excluirExercicio, importarBibliotecaPadrao } from "@/app/actions/exercicios";
 import { youtubeEmbedUrl } from "@/lib/youtube";
-import { Trash2, Video } from "lucide-react";
+import { Download, Trash2, Video } from "lucide-react";
 import Link from "next/link";
 
 export default async function BibliotecaPage({
@@ -32,9 +33,16 @@ export default async function BibliotecaPage({
 
   return (
     <div className="space-y-4 p-4 md:p-0">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold">Biblioteca de exercícios</h1>
-        <NovoExercicioToggle />
+        <div className="flex shrink-0 gap-2">
+          <form action={importarBibliotecaPadrao}>
+            <Button type="submit" variant="outline" size="sm" className="gap-1.5">
+              <Download size={14} /> Importar padrão
+            </Button>
+          </form>
+          <NovoExercicioToggle />
+        </div>
       </div>
 
       <div className="flex gap-2 overflow-x-auto">

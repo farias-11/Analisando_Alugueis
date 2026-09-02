@@ -3,7 +3,9 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAluno } from "@/lib/data/current-user";
+import { validarSenha } from "@/lib/password";
 import { revalidatePath } from "next/cache";
+import { TIPOS_NOTIFICACAO_ALUNO } from "@/lib/constantes";
 
 export type TrocarSenhaState = { error?: string; ok?: boolean } | undefined;
 
@@ -14,7 +16,8 @@ export async function trocarSenha(
   const novaSenha = String(formData.get("novaSenha") || "");
   const confirmar = String(formData.get("confirmarSenha") || "");
 
-  if (novaSenha.length < 8) return { error: "A senha precisa ter pelo menos 8 caracteres." };
+  const erroSenha = validarSenha(novaSenha);
+  if (erroSenha) return { error: erroSenha };
   if (novaSenha !== confirmar) return { error: "As senhas não coincidem." };
 
   const supabase = await createClient();
@@ -40,5 +43,18 @@ export async function atualizarFotoAluno(formData: FormData) {
   const supabase = await createClient();
   await supabase.from("alunos").update({ foto_url: pub.publicUrl }).eq("id", aluno.id);
 
+  revalidatePath("/conta");
+}
+
+export async function atualizarPreferenciasNotificacaoAluno(formData: FormData) {
+  const { aluno } = await requireAluno();
+  const supabase = await createClient();
+
+  const preferencias: Record<string, boolean> = {};
+  for (const { tipo } of TIPOS_NOTIFICACAO_ALUNO) {
+    preferencias[tipo] = formData.get(`pref_${tipo}`) === "on";
+  }
+
+  await supabase.from("alunos").update({ notificacoes_preferencias: preferencias }).eq("id", aluno.id);
   revalidatePath("/conta");
 }

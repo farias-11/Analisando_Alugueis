@@ -12,7 +12,9 @@ export function TopBar({
   action?: ReactNode;
 }) {
   return (
-    <header className="sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-surface/95 px-4 py-3.5 backdrop-blur">
+    <header
+      className={`sticky top-0 z-30 flex items-center gap-2 border-b border-border bg-surface/95 py-3.5 backdrop-blur pl-4 ${action ? "pr-14" : "pr-4"}`}
+    >
       {back ? (
         <Link
           href={back}

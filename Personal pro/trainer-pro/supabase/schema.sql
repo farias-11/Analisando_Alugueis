@@ -13,6 +13,15 @@ create table personals (
   whatsapp_numero text not null, -- formato E.164 sem "+" , ex: 5511999999999 (usado no link wa.me)
   email text not null,
   foto_url text,
+  notificacoes_preferencias jsonb not null default '{}'::jsonb,
+  resumo_diario_ativo boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+-- role separada de personal/aluno — dono/responsável pelo app, vê tickets de suporte
+create table admins (
+  id uuid primary key references auth.users (id) on delete cascade,
+  nome text not null,
   created_at timestamptz not null default now()
 );
 
@@ -58,6 +67,9 @@ create table alunos (
   exclusao_solicitada_em timestamptz,
 
   anotacoes_internas text,
+  notificacoes_preferencias jsonb not null default '{}'::jsonb,
+  convite_enviado_em timestamptz not null default now(), -- reenviar convite atualiza este campo
+  fotos_solicitadas jsonb not null default '[]'::jsonb, -- ângulos de foto que o personal pediu (ex: ["Frente","Lado","Costas"])
 
   created_at timestamptz not null default now()
 );
@@ -95,6 +107,41 @@ create table exercicio_midias (
 );
 
 create index idx_exercicio_midias_exercicio on exercicio_midias (exercicio_id);
+
+-- onboarding: personal novo já começa com uma biblioteca básica em vez de vazia
+create or replace function seed_biblioteca_padrao()
+returns trigger
+language plpgsql
+as $$
+begin
+  insert into exercicios (personal_id, nome, grupo_muscular, midia_tipo) values
+    (new.id, 'Agachamento Livre', 'Pernas', 'youtube'),
+    (new.id, 'Leg Press 45°', 'Pernas', 'youtube'),
+    (new.id, 'Cadeira Extensora', 'Pernas', 'youtube'),
+    (new.id, 'Mesa Flexora', 'Pernas', 'youtube'),
+    (new.id, 'Stiff', 'Posterior', 'youtube'),
+    (new.id, 'Elevação Pélvica', 'Glúteos', 'youtube'),
+    (new.id, 'Supino Reto', 'Peito', 'youtube'),
+    (new.id, 'Supino Inclinado', 'Peito', 'youtube'),
+    (new.id, 'Crucifixo', 'Peito', 'youtube'),
+    (new.id, 'Puxada Frente', 'Costas', 'youtube'),
+    (new.id, 'Remada Curvada', 'Costas', 'youtube'),
+    (new.id, 'Remada Baixa', 'Costas', 'youtube'),
+    (new.id, 'Desenvolvimento Ombros', 'Ombros', 'youtube'),
+    (new.id, 'Elevação Lateral', 'Ombros', 'youtube'),
+    (new.id, 'Rosca Direta', 'Bíceps', 'youtube'),
+    (new.id, 'Rosca Alternada', 'Bíceps', 'youtube'),
+    (new.id, 'Tríceps Corda', 'Tríceps', 'youtube'),
+    (new.id, 'Tríceps Testa', 'Tríceps', 'youtube'),
+    (new.id, 'Abdominal Supra', 'Abdômen', 'youtube'),
+    (new.id, 'Prancha', 'Abdômen', 'youtube');
+  return new;
+end;
+$$;
+
+create trigger trg_seed_biblioteca_padrao
+after insert on personals
+for each row execute function seed_biblioteca_padrao();
 
 -- =========================================================
 -- 3. Ciclo de treino → Aula → Aula_exercício → Execução
@@ -135,7 +182,12 @@ create table aula_exercicios (
   series int not null default 3,
   repeticoes text not null default '10-12', -- texto livre: "10-12", "até a falha" etc.
   carga_inicial numeric(6, 2),
-  descanso_seg int default 60
+  descanso_seg int default 60,
+  eh_aquecimento boolean not null default false,
+  combina_proximo boolean not null default false, -- true = bi-set/superset com o próximo exercício (por ordem)
+  tipo text not null default 'forca' check (tipo in ('forca', 'cardio')),
+  duracao_min int, -- só pra tipo='cardio'
+  intensidade text -- só pra tipo='cardio' (texto livre: "leve", "6km/h", etc.)
 );
 
 create index idx_aula_exercicios_aula on aula_exercicios (aula_id);
@@ -147,11 +199,15 @@ create table execucoes (
   serie_numero int not null,
   carga numeric(6, 2),
   repeticoes int,
-  data timestamptz not null default now()
+  data timestamptz not null default now(),
+  dia date not null generated always as ((data at time zone 'utc')::date) stored
 );
 
 create index idx_execucoes_aula_exercicio on execucoes (aula_exercicio_id);
 create index idx_execucoes_aluno on execucoes (aluno_id);
+-- uma série só tem um registro por dia — reenviar a mesma série atualiza em vez
+-- de duplicar (permite editar carga/reps depois de "finalizar todas as séries")
+create unique index idx_execucoes_serie_unica on execucoes (aula_exercicio_id, aluno_id, serie_numero, dia);
 
 -- =========================================================
 -- 4. Templates de treino (reutilizáveis)
@@ -182,8 +238,18 @@ create table template_aula_exercicios (
   series int not null default 3,
   repeticoes text not null default '10-12',
   carga_inicial numeric(6, 2),
-  descanso_seg int default 60
+  descanso_seg int default 60,
+  eh_aquecimento boolean not null default false,
+  combina_proximo boolean not null default false,
+  tipo text not null default 'forca' check (tipo in ('forca', 'cardio')),
+  duracao_min int,
+  intensidade text
 );
+
+-- rastreabilidade: de qual template/aluno esse ciclo veio (quando aplicado via
+-- template ou duplicado de outro aluno) — precisa vir depois de `templates` existir
+alter table ciclos add column origem_template_id uuid references templates (id) on delete set null;
+alter table ciclos add column origem_aluno_id uuid references alunos (id) on delete set null;
 
 -- =========================================================
 -- 5. Avaliações — Anamnese e Bioimpedância
@@ -241,10 +307,12 @@ create table fotos_progresso (
   aluno_id uuid not null references alunos (id) on delete cascade,
   url text not null,
   data date not null default current_date,
+  angulo text, -- qual bloco solicitado essa foto preenche (null = avulsa)
   created_at timestamptz not null default now()
 );
 
 create index idx_fotos_progresso_aluno on fotos_progresso (aluno_id, data desc);
+create index idx_fotos_progresso_angulo on fotos_progresso (aluno_id, angulo, data desc);
 
 -- =========================================================
 -- 7. Financeiro
@@ -286,6 +354,47 @@ create table tickets (
 
 create index idx_tickets_aluno on tickets (aluno_id);
 create index idx_tickets_status on tickets (status);
+
+-- respostas rápidas em tickets de dor — conjunto pré-configurado e editável
+-- que o personal escolhe e ajusta antes de enviar (handoff, seção 3.4)
+create table respostas_rapidas (
+  id uuid primary key default gen_random_uuid(),
+  personal_id uuid not null references personals (id) on delete cascade,
+  texto text not null,
+  ordem int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+create index idx_respostas_rapidas_personal on respostas_rapidas (personal_id, ordem);
+
+-- =========================================================
+-- 8b. Tickets de suporte interno (bug/sugestão) — nunca sai da plataforma,
+-- visível só pra quem abriu e pra conta admin (diferente do ticket de dor,
+-- que é sobre o treino e vira mensagem de WhatsApp pro personal)
+-- =========================================================
+
+create type categoria_ticket_suporte as enum ('bug', 'sugestao');
+create type status_ticket_suporte as enum ('aberto', 'resolvido');
+
+create table tickets_suporte (
+  id uuid primary key default gen_random_uuid(),
+  autor_tipo notificacao_destinatario not null,
+  personal_id uuid references personals (id) on delete cascade,
+  aluno_id uuid references alunos (id) on delete cascade,
+  categoria categoria_ticket_suporte not null default 'bug',
+  descricao text not null,
+  print_url text,
+  status status_ticket_suporte not null default 'aberto',
+  resposta_admin text,
+  created_at timestamptz not null default now(),
+  resolvido_em timestamptz,
+  constraint chk_autor_ticket_suporte check (
+    (autor_tipo = 'personal' and personal_id is not null) or
+    (autor_tipo = 'aluno' and aluno_id is not null)
+  )
+);
+
+create index idx_tickets_suporte_status on tickets_suporte (status);
 
 -- =========================================================
 -- 9. Notificações internas
@@ -398,11 +507,22 @@ as $$
   select id from alunos where auth_user_id = auth.uid();
 $$;
 
+create or replace function is_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (select 1 from admins where id = auth.uid());
+$$;
+
 -- =========================================================
 -- 11. Row Level Security
 -- =========================================================
 
 alter table personals enable row level security;
+alter table admins enable row level security;
 alter table alunos enable row level security;
 alter table exercicios enable row level security;
 alter table exercicio_midias enable row level security;
@@ -419,12 +539,18 @@ alter table medidas enable row level security;
 alter table fotos_progresso enable row level security;
 alter table pagamentos enable row level security;
 alter table tickets enable row level security;
+alter table respostas_rapidas enable row level security;
+alter table tickets_suporte enable row level security;
 alter table notificacoes enable row level security;
 alter table push_subscriptions enable row level security;
 
 -- personals: só o próprio personal lê/edita seu perfil
 create policy personals_self on personals
   for all using (id = auth.uid()) with check (id = auth.uid());
+
+-- admins: só o próprio admin lê seu registro (existência checada via is_admin())
+create policy admins_self on admins
+  for select using (id = auth.uid());
 
 -- aluno pode ler (só leitura) os dados do próprio personal — necessário pro
 -- link do WhatsApp no ticket de dor e pra tela "Ajuda e suporte"
@@ -491,9 +617,12 @@ create policy template_aula_exercicios_personal_all on template_aula_exercicios
   for all using (template_aula_id in (select id from template_aulas where template_id in (select id from templates where personal_id = auth.uid())))
   with check (template_aula_id in (select id from template_aulas where template_id in (select id from templates where personal_id = auth.uid())));
 
--- anamneses: personal lê; aluno lê/preenche a própria
+-- anamneses: personal lê (só se o aluno não revogou o consentimento de dados
+-- de saúde — item B10); aluno lê/preenche a própria
 create policy anamneses_personal_select on anamneses
-  for select using (aluno_id in (select id from alunos where personal_id = auth.uid()));
+  for select using (
+    aluno_id in (select id from alunos where personal_id = auth.uid() and consentimento_saude_aceito = true)
+  );
 create policy anamneses_aluno_all on anamneses
   for all using (aluno_id = auth_aluno_id()) with check (aluno_id = auth_aluno_id());
 
@@ -504,14 +633,19 @@ create policy bioimpedancias_personal_all on bioimpedancias
 create policy bioimpedancias_aluno_select on bioimpedancias
   for select using (aluno_id = auth_aluno_id());
 
--- medidas e fotos: aluno lança as próprias; personal lê
+-- medidas e fotos: aluno lança as próprias; personal lê (mesma trava de
+-- consentimento revogado da anamnese — item B10)
 create policy medidas_personal_select on medidas
-  for select using (aluno_id in (select id from alunos where personal_id = auth.uid()));
+  for select using (
+    aluno_id in (select id from alunos where personal_id = auth.uid() and consentimento_saude_aceito = true)
+  );
 create policy medidas_aluno_all on medidas
   for all using (aluno_id = auth_aluno_id()) with check (aluno_id = auth_aluno_id());
 
 create policy fotos_personal_select on fotos_progresso
-  for select using (aluno_id in (select id from alunos where personal_id = auth.uid()));
+  for select using (
+    aluno_id in (select id from alunos where personal_id = auth.uid() and consentimento_saude_aceito = true)
+  );
 create policy fotos_aluno_all on fotos_progresso
   for all using (aluno_id = auth_aluno_id()) with check (aluno_id = auth_aluno_id());
 
@@ -528,6 +662,23 @@ create policy tickets_aluno_select_insert on tickets
   for select using (aluno_id = auth_aluno_id());
 create policy tickets_aluno_insert on tickets
   for insert with check (aluno_id = auth_aluno_id());
+
+create policy respostas_rapidas_personal_all on respostas_rapidas
+  for all using (personal_id = auth.uid()) with check (personal_id = auth.uid());
+
+-- tickets de suporte: autor lê/cria os próprios; admin lê/edita todos
+create policy tickets_suporte_autor_select on tickets_suporte
+  for select using (
+    (autor_tipo = 'personal' and personal_id = auth.uid()) or
+    (autor_tipo = 'aluno' and aluno_id = auth_aluno_id())
+  );
+create policy tickets_suporte_autor_insert on tickets_suporte
+  for insert with check (
+    (autor_tipo = 'personal' and personal_id = auth.uid()) or
+    (autor_tipo = 'aluno' and aluno_id = auth_aluno_id())
+  );
+create policy tickets_suporte_admin_all on tickets_suporte
+  for all using (is_admin()) with check (is_admin());
 
 -- notificações: cada um lê e marca como lida as próprias
 create policy notificacoes_personal on notificacoes

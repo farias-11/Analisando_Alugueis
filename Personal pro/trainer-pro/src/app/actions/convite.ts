@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { validarSenha } from "@/lib/password";
 import { redirect } from "next/navigation";
 
 export type AceitarConviteState = { error?: string } | undefined;
@@ -18,8 +19,9 @@ export async function aceitarConvite(
   const aceitaTermos = formData.get("aceitaTermos") === "on";
   const consenteDadosSaude = formData.get("consenteDadosSaude") === "on";
 
-  if (senha.length < 8) {
-    return { error: "A senha precisa ter pelo menos 8 caracteres." };
+  const erroSenha = validarSenha(senha);
+  if (erroSenha) {
+    return { error: erroSenha };
   }
   if (senha !== confirmarSenha) {
     return { error: "As senhas não coincidem." };

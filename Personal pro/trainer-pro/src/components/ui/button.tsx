@@ -44,6 +44,7 @@ interface ButtonLinkProps {
   size?: Size;
   className?: string;
   children: React.ReactNode;
+  prefetch?: boolean;
 }
 
 export function ButtonLink({
@@ -52,9 +53,10 @@ export function ButtonLink({
   variant = "primary",
   size = "md",
   children,
+  prefetch,
 }: ButtonLinkProps) {
   return (
-    <Link href={href} className={cn(base, variants[variant], sizes[size], className)}>
+    <Link href={href} prefetch={prefetch} className={cn(base, variants[variant], sizes[size], className)}>
       {children}
     </Link>
   );

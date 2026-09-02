@@ -13,6 +13,7 @@ import {
   MessageCircleWarning,
   Wallet,
   Settings,
+  Wrench,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +33,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   tickets: MessageCircleWarning,
   financeiro: Wallet,
   configuracoes: Settings,
+  admin: Wrench,
 };
 
 export type IconName = keyof typeof ICON_MAP;

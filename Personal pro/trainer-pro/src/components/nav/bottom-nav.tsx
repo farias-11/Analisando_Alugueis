@@ -11,6 +11,10 @@ export interface NavItem {
   icon: IconName;
 }
 
+// prefetch=false: essa nav fica fixa e visível em TODA página — o Next
+// reprefetcha as rotas dinâmicas o tempo todo (staleTime delas expira rápido),
+// competindo por rede com o carregamento real da página e deixando a
+// navegação mais lenta em vez de mais rápida. São 1 toque de distância mesmo.
 export function BottomNav({ items }: { items: NavItem[] }) {
   const pathname = usePathname();
 
@@ -24,6 +28,7 @@ export function BottomNav({ items }: { items: NavItem[] }) {
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
+                prefetch={false}
                 className={cn(
                   "flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium",
                   active ? "text-primary" : "text-muted-2"

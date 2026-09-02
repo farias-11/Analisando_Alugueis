@@ -2,14 +2,46 @@
 
 import { useActionState, useState } from "react";
 import { convidarAluno } from "@/app/actions/alunos";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Toggle } from "@/components/ui/form";
 import { Card, CardTitle } from "@/components/ui/card";
+import { buildWhatsappLink, mensagemConvite } from "@/lib/whatsapp";
+import { MessageCircle } from "lucide-react";
 
-export function ConvidarAlunoForm() {
+export function ConvidarAlunoForm({ personalNome }: { personalNome: string }) {
   const [state, formAction, pending] = useActionState(convidarAluno, undefined);
   const [anamnese, setAnamnese] = useState(false);
   const [bioimpedancia, setBioimpedancia] = useState(false);
+
+  if (state && "sucesso" in state) {
+    const linkWhatsapp = state.whatsapp
+      ? buildWhatsappLink(state.whatsapp, mensagemConvite({ alunoNome: state.alunoNome, personalNome, link: state.conviteLink }))
+      : null;
+
+    return (
+      <Card className="space-y-3">
+        <CardTitle>{state.alunoNome} foi cadastrado(a)!</CardTitle>
+        <p className="text-sm text-muted">
+          Agora é só enviar o convite. WhatsApp é o jeito mais rápido do aluno ver e entrar — o e-mail
+          fica como alternativa, na ficha dele.
+        </p>
+        {linkWhatsapp ? (
+          <a href={linkWhatsapp} target="_blank" rel="noreferrer">
+            <Button type="button" className="w-full gap-1.5">
+              <MessageCircle size={16} /> Enviar convite por WhatsApp
+            </Button>
+          </a>
+        ) : (
+          <p className="text-sm text-warning">
+            Esse aluno não tem WhatsApp cadastrado — envie por e-mail na ficha dele.
+          </p>
+        )}
+        <ButtonLink href={`/alunos/${state.alunoId}`} variant="outline" className="w-full">
+          Ver ficha do aluno
+        </ButtonLink>
+      </Card>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4">
@@ -61,7 +93,7 @@ export function ConvidarAlunoForm() {
         </Field>
       </Card>
 
-      {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}
+      {state && "error" in state ? <p className="text-sm text-danger">{state.error}</p> : null}
 
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Enviando..." : "Enviar convite"}

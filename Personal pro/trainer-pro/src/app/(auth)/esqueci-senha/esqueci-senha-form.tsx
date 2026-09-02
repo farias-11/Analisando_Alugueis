@@ -14,7 +14,7 @@ export function EsqueciSenhaForm() {
       <div className="flex flex-col items-center gap-3 rounded-xl border border-success/30 bg-success-soft p-4 text-center">
         <CheckCircle2 className="text-success" size={28} />
         <p className="text-sm text-foreground/90">
-          Se esse e-mail estiver cadastrado, você vai receber um link para redefinir sua senha.
+          Link de redefinição enviado! Confira sua caixa de entrada (e o spam).
         </p>
       </div>
     );

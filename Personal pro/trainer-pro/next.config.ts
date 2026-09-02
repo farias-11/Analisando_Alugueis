@@ -4,6 +4,22 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  experimental: {
+    // padrão do Next é 1MB — foto de celular real (avatar, exercício, progresso,
+    // tickets) passa disso fácil. Sem isso, todo upload de imagem do app falha
+    // com erro 500 genérico assim que o arquivo é "grande" de verdade.
+    serverActions: {
+      bodySizeLimit: "15mb",
+    },
+    // desde o Next 15 o cache de prefetch de rota dinâmica é 0s por padrão —
+    // como quase toda rota nossa é dinâmica (usa cookies/sessão) e tem várias
+    // com loading.tsx (prefetchable), o menu inferior/lateral reprefetchava os
+    // mesmos links sem parar, sem nunca considerar o resultado "fresco",
+    // enchendo a rede de requisições concorrentes e travando a navegação real.
+    staleTimes: {
+      dynamic: 30,
+    },
+  },
   images: {
     remotePatterns: [
       {

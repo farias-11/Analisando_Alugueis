@@ -34,23 +34,26 @@ export default async function TreinoDoDiaPage() {
   const hojeInicio = new Date();
   hojeInicio.setHours(0, 0, 0, 0);
 
-  const aulasComStatus = await Promise.all(
-    aulas.map(async (aula) => {
-      const exercicios = await getExerciciosDaAula(aula.id);
-      const aulaExercicioIds = exercicios.map((e) => e.id);
-      let concluidaHoje = false;
-      if (aulaExercicioIds.length > 0) {
-        const { count } = await supabase
-          .from("execucoes")
-          .select("id", { count: "exact", head: true })
-          .eq("aluno_id", aluno.id)
-          .in("aula_exercicio_id", aulaExercicioIds)
-          .gte("data", hojeInicio.toISOString());
-        concluidaHoje = (count ?? 0) > 0;
-      }
-      return { aula, totalExercicios: exercicios.length, concluidaHoje };
-    })
-  );
+  const exerciciosPorAula = await Promise.all(aulas.map((aula) => getExerciciosDaAula(aula.id)));
+
+  // uma única query pras execuções de hoje de TODAS as aulas, em vez de uma
+  // query de contagem por aula (evita N idas ao banco em série/paralelo)
+  const todosAulaExercicioIds = exerciciosPorAula.flat().map((e) => e.id);
+  const { data: execucoesHoje } = todosAulaExercicioIds.length
+    ? await supabase
+        .from("execucoes")
+        .select("aula_exercicio_id")
+        .eq("aluno_id", aluno.id)
+        .in("aula_exercicio_id", todosAulaExercicioIds)
+        .gte("data", hojeInicio.toISOString())
+    : { data: [] as { aula_exercicio_id: string }[] };
+  const aulaExercicioIdsFeitosHoje = new Set((execucoesHoje ?? []).map((e) => e.aula_exercicio_id));
+
+  const aulasComStatus = aulas.map((aula, i) => {
+    const exercicios = exerciciosPorAula[i];
+    const concluidaHoje = exercicios.some((e) => aulaExercicioIdsFeitosHoje.has(e.id));
+    return { aula, totalExercicios: exercicios.length, concluidaHoje };
+  });
 
   return (
     <div>

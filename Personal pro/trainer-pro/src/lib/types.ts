@@ -4,6 +4,12 @@ export type StatusPagamento = "em_dia" | "atrasado";
 export type StatusCiclo = "ativo" | "vencendo" | "vencido";
 export type StatusTicket = "aberto" | "resolvido";
 export type MidiaTipo = "youtube" | "upload";
+export type CategoriaTicketSuporte = "bug" | "sugestao";
+export type StatusTicketSuporte = "aberto" | "resolvido";
+
+export interface NotificacoesPreferencias {
+  [tipo: string]: boolean;
+}
 
 export interface Personal {
   id: string;
@@ -11,6 +17,14 @@ export interface Personal {
   whatsapp_numero: string;
   email: string;
   foto_url: string | null;
+  notificacoes_preferencias: NotificacoesPreferencias;
+  resumo_diario_ativo: boolean;
+  created_at: string;
+}
+
+export interface Admin {
+  id: string;
+  nome: string;
   created_at: string;
 }
 
@@ -42,6 +56,9 @@ export interface Aluno {
   pedido_atualizacao_enviado_em: string | null;
   exclusao_solicitada_em: string | null;
   anotacoes_internas: string | null;
+  notificacoes_preferencias: NotificacoesPreferencias;
+  convite_enviado_em: string;
+  fotos_solicitadas: string[];
   created_at: string;
 }
 
@@ -72,6 +89,8 @@ export interface Ciclo {
   data_inicio: string;
   data_fim: string;
   ativo: boolean;
+  origem_template_id: string | null;
+  origem_aluno_id: string | null;
   created_at: string;
 }
 
@@ -93,6 +112,11 @@ export interface AulaExercicio {
   repeticoes: string;
   carga_inicial: number | null;
   descanso_seg: number | null;
+  eh_aquecimento: boolean;
+  combina_proximo: boolean;
+  tipo: "forca" | "cardio";
+  duracao_min: number | null;
+  intensidade: string | null;
 }
 
 export interface Execucao {
@@ -131,6 +155,11 @@ export interface TemplateAulaExercicio {
   repeticoes: string;
   carga_inicial: number | null;
   descanso_seg: number | null;
+  eh_aquecimento: boolean;
+  combina_proximo: boolean;
+  tipo: "forca" | "cardio";
+  duracao_min: number | null;
+  intensidade: string | null;
 }
 
 export interface Anamnese {
@@ -175,6 +204,7 @@ export interface FotoProgresso {
   aluno_id: string;
   url: string;
   data: string;
+  angulo: string | null;
   created_at: string;
 }
 
@@ -200,6 +230,28 @@ export interface Ticket {
   foto_url: string | null;
   status: StatusTicket;
   observacao_resolucao: string | null;
+  created_at: string;
+  resolvido_em: string | null;
+}
+
+export interface RespostaRapida {
+  id: string;
+  personal_id: string;
+  texto: string;
+  ordem: number;
+  created_at: string;
+}
+
+export interface TicketSuporte {
+  id: string;
+  autor_tipo: "personal" | "aluno";
+  personal_id: string | null;
+  aluno_id: string | null;
+  categoria: CategoriaTicketSuporte;
+  descricao: string;
+  print_url: string | null;
+  status: StatusTicketSuporte;
+  resposta_admin: string | null;
   created_at: string;
   resolvido_em: string | null;
 }

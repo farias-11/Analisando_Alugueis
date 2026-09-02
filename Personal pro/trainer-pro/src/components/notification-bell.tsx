@@ -5,6 +5,7 @@ export function NotificationBell({ count, href = "/notificacoes" }: { count: num
   return (
     <Link
       href={href}
+      prefetch={false}
       className="relative flex h-9 w-9 items-center justify-center rounded-full bg-surface text-foreground shadow-sm ring-1 ring-border"
     >
       <Bell size={18} />

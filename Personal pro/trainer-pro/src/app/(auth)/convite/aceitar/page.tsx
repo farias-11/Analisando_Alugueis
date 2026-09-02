@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import { Dumbbell } from "lucide-react";
 import { AceitarConviteForm } from "./aceitar-form";
+import { InstallPromptBanner } from "@/components/install-prompt-banner";
 
 export default async function AceitarConvitePage() {
   const supabase = await createClient();
@@ -42,6 +43,13 @@ export default async function AceitarConvitePage() {
               {aluno.nome} · {aluno.email}
             </p>
           </div>
+        </div>
+
+        {/* mostra o convite pra instalar já na primeira tela — é o momento em
+            que o aluno mais provavelmente está com o navegador aberto vindo
+            do e-mail, antes mesmo de definir a senha */}
+        <div className="mb-5">
+          <InstallPromptBanner />
         </div>
 
         <p className="mb-5 text-center text-sm text-muted">

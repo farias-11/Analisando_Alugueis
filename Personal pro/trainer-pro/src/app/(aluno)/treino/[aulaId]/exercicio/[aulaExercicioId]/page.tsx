@@ -1,7 +1,14 @@
 import { requireAluno } from "@/lib/data/current-user";
-import { getAulaExercicio, getUltimaMarca, getExerciciosDaAula } from "@/lib/data/aluno";
+import {
+  getAulaExercicio,
+  getUltimaMarca,
+  getExerciciosDaAula,
+  getExecucoesDeHoje,
+  getInicioTreinoHoje,
+} from "@/lib/data/aluno";
 import { notFound } from "next/navigation";
 import { TopBar } from "@/components/nav/top-bar";
+import { TreinoTimer } from "@/components/treino-timer";
 import { ExecucaoClient } from "./execucao-client";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
@@ -19,9 +26,11 @@ export default async function ExecucaoExercicioPage({
 
   if (!registro) notFound();
 
-  const [ultimaMarca, exerciciosDaAula] = await Promise.all([
+  const [ultimaMarca, exerciciosDaAula, execucoesDeHoje, inicioIso] = await Promise.all([
     getUltimaMarca(aluno.id, aulaExercicioId),
     getExerciciosDaAula(aulaId),
+    getExecucoesDeHoje(aluno.id, aulaExercicioId),
+    getInicioTreinoHoje(aluno.id, aulaId),
   ]);
 
   const ordem = exerciciosDaAula.map((e) => e.id);
@@ -31,11 +40,16 @@ export default async function ExecucaoExercicioPage({
 
   return (
     <div>
-      <TopBar title={registro.exercicio.nome} back={`/treino/${aulaId}`} />
+      <TopBar
+        title={registro.exercicio.nome}
+        back={`/treino/${aulaId}`}
+        action={<TreinoTimer inicioIso={inicioIso} />}
+      />
       <ExecucaoClient
         aulaId={aulaId}
         aulaExercicio={registro}
         ultimaMarca={ultimaMarca}
+        execucoesDeHoje={execucoesDeHoje}
         proximoExercicioId={proximoExercicioId}
         ehUltimoExercicio={ehUltimoExercicio}
       />

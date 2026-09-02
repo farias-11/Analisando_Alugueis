@@ -9,15 +9,20 @@ function rotuloCurto(iso: string) {
 
 export async function getGraficoPeso(alunoId: string): Promise<ChartPoint[]> {
   const supabase = await createClient();
+  // desc + limit pega os 30 mais RECENTES (não os 30 primeiros da vida do
+  // aluno) — depois reordena pra ascendente, que é o que o gráfico espera
   const { data } = await supabase
     .from("medidas")
     .select("data, peso")
     .eq("aluno_id", alunoId)
     .not("peso", "is", null)
-    .order("data", { ascending: true })
+    .order("data", { ascending: false })
     .limit(30);
 
-  return (data ?? []).map((m) => ({ data: rotuloCurto(m.data), valor: Number(m.peso) }));
+  return (data ?? [])
+    .slice()
+    .reverse()
+    .map((m) => ({ data: rotuloCurto(m.data), valor: Number(m.peso) }));
 }
 
 export async function getGraficoBioimpedancia(
@@ -28,14 +33,16 @@ export async function getGraficoBioimpedancia(
     .from("bioimpedancias")
     .select("data, peso, percentual_gordura")
     .eq("aluno_id", alunoId)
-    .order("data", { ascending: true })
+    .order("data", { ascending: false })
     .limit(30);
 
+  const recentesAscendente = (data ?? []).slice().reverse();
+
   return {
-    peso: (data ?? [])
+    peso: recentesAscendente
       .filter((b) => b.peso !== null)
       .map((b) => ({ data: rotuloCurto(b.data), valor: Number(b.peso) })),
-    percentualGordura: (data ?? [])
+    percentualGordura: recentesAscendente
       .filter((b) => b.percentual_gordura !== null)
       .map((b) => ({ data: rotuloCurto(b.data), valor: Number(b.percentual_gordura) })),
   };

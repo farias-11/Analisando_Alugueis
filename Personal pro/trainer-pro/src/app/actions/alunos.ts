@@ -7,7 +7,10 @@ import { notificarAluno } from "@/lib/notificar";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-export type ConvidarAlunoState = { error?: string } | undefined;
+export type ConvidarAlunoState =
+  | { error: string }
+  | { sucesso: true; alunoId: string; alunoNome: string; whatsapp: string | null; conviteLink: string }
+  | undefined;
 
 export async function convidarAluno(
   _prevState: ConvidarAlunoState,
@@ -54,20 +57,30 @@ export async function convidarAluno(
 
   const admin = createAdminClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  const { error: inviteError } = await admin.auth.admin.inviteUserByEmail(email, {
-    redirectTo: `${siteUrl}/auth/confirm?next=/convite/aceitar`,
+  // WhatsApp é o canal principal do convite (handoff, seção 4): gera o link
+  // sem disparar e-mail automático — o personal manda ele mesmo por WhatsApp.
+  // O e-mail continua disponível, mas como opção secundária (reenviarConvite).
+  const { data: link, error: inviteError } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: { redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar` },
   });
 
-  if (inviteError) {
-    // aluno já foi criado no banco — o personal pode reenviar o convite depois
+  if (inviteError || !link) {
+    // aluno já foi criado no banco — o personal pode gerar o link de novo na ficha dele
     return {
-      error:
-        "Aluno criado, mas não foi possível enviar o e-mail de convite agora. Tente reenviar na ficha do aluno.",
+      error: "Aluno criado, mas não foi possível gerar o link de convite agora. Tente de novo na ficha do aluno.",
     };
   }
 
   revalidatePath("/alunos");
-  redirect(`/alunos/${aluno.id}`);
+  return {
+    sucesso: true,
+    alunoId: aluno.id,
+    alunoNome: aluno.nome,
+    whatsapp: aluno.whatsapp,
+    conviteLink: link.properties.action_link,
+  };
 }
 
 export async function marcarComoPago(formData: FormData) {
@@ -121,6 +134,46 @@ export async function pedirAtualizacao(formData: FormData) {
   revalidatePath(`/alunos/${alunoId}`);
 }
 
+export async function atualizarConfiguracoesAluno(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoId = String(formData.get("alunoId") || "");
+
+  const anamneseAtiva = formData.get("anamneseAtiva") === "on";
+  const bioimpedanciaAtiva = formData.get("bioimpedanciaAtiva") === "on";
+  const bioimpedanciaFrequencia = formData.get("bioimpedanciaFrequencia");
+  const duracaoCiclo = Number(formData.get("duracaoCiclo") || 4);
+
+  await supabase
+    .from("alunos")
+    .update({
+      anamnese_ativa: anamneseAtiva,
+      bioimpedancia_ativa: bioimpedanciaAtiva,
+      bioimpedancia_frequencia_dias: bioimpedanciaAtiva ? Number(bioimpedanciaFrequencia) || 30 : null,
+      ciclo_duracao_padrao_semanas: duracaoCiclo,
+    })
+    .eq("id", alunoId)
+    .eq("personal_id", personal.id);
+
+  revalidatePath(`/alunos/${alunoId}`);
+}
+
+export async function atualizarFotosSolicitadas(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoId = String(formData.get("alunoId") || "");
+
+  const selecionados = formData.getAll("angulos").map(String);
+
+  await supabase
+    .from("alunos")
+    .update({ fotos_solicitadas: selecionados })
+    .eq("id", alunoId)
+    .eq("personal_id", personal.id);
+
+  revalidatePath(`/alunos/${alunoId}`);
+}
+
 export async function salvarAnotacoes(formData: FormData) {
   await requirePersonal();
   const supabase = await createClient();
@@ -129,4 +182,157 @@ export async function salvarAnotacoes(formData: FormData) {
 
   await supabase.from("alunos").update({ anotacoes_internas: anotacoes }).eq("id", alunoId);
   revalidatePath(`/alunos/${alunoId}`);
+}
+
+export async function reenviarConvite(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoId = String(formData.get("alunoId") || "");
+
+  const { data: aluno } = await supabase
+    .from("alunos")
+    .select("email")
+    .eq("id", alunoId)
+    .eq("personal_id", personal.id)
+    .maybeSingle();
+  if (!aluno) return;
+
+  const admin = createAdminClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  await admin.auth.admin.inviteUserByEmail(aluno.email, {
+    redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar`,
+  });
+
+  await supabase.from("alunos").update({ convite_enviado_em: new Date().toISOString() }).eq("id", alunoId);
+
+  revalidatePath(`/alunos/${alunoId}`);
+}
+
+export type GerarLinkConviteState = { error: string } | { conviteLink: string } | undefined;
+
+/** Gera um novo link de convite pra reenviar por WhatsApp (canal principal) a
+ * partir da ficha do aluno — sem disparar e-mail. Usa a mesma sessão de
+ * convite já criada no auth (generateLink não recria o usuário). */
+export async function gerarLinkConviteWhatsapp(
+  _prevState: GerarLinkConviteState,
+  formData: FormData
+): Promise<GerarLinkConviteState> {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoId = String(formData.get("alunoId") || "");
+
+  const { data: aluno } = await supabase
+    .from("alunos")
+    .select("email")
+    .eq("id", alunoId)
+    .eq("personal_id", personal.id)
+    .maybeSingle();
+  if (!aluno) return { error: "Aluno não encontrado." };
+
+  const admin = createAdminClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const { data: link, error } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email: aluno.email,
+    options: { redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar` },
+  });
+  if (error || !link) return { error: "Não foi possível gerar o link agora. Tente de novo." };
+
+  await supabase.from("alunos").update({ convite_enviado_em: new Date().toISOString() }).eq("id", alunoId);
+  revalidatePath(`/alunos/${alunoId}`);
+
+  return { conviteLink: link.properties.action_link };
+}
+
+export async function cancelarConvite(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoId = String(formData.get("alunoId") || "");
+
+  await supabase.from("alunos").delete().eq("id", alunoId).eq("personal_id", personal.id).eq("status_convite", "pendente");
+
+  revalidatePath("/alunos");
+  redirect("/alunos");
+}
+
+// Ativo/inativo é sobre a relação de treino em si (aluno pausou, saiu, etc.) —
+// só faz sentido depois que o convite foi aceito, então a UI só mostra essa
+// ação nesse ponto. Um aluno inativo some do cálculo de recebíveis do
+// financeiro (ver financeiro/page.tsx) mas mantém todo o histórico.
+export async function alternarStatusAluno(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoId = String(formData.get("alunoId") || "");
+  const novoStatus = formData.get("novoStatus") === "inativo" ? "inativo" : "ativo";
+
+  await supabase
+    .from("alunos")
+    .update({ status: novoStatus })
+    .eq("id", alunoId)
+    .eq("personal_id", personal.id);
+
+  revalidatePath(`/alunos/${alunoId}`);
+  revalidatePath("/alunos");
+}
+
+// ---------------------------------------------------------------------------
+// Ações em lote (handoff, seção 3.1) — versão rápida das ações que já existem
+// individualmente. "Marcar como pago em lote" usa o valor de pagamento
+// cadastrado do aluno e Pix como forma padrão; pra ajustar valor/forma
+// específico continua existindo o fluxo individual em cada ficha.
+// ---------------------------------------------------------------------------
+
+export async function marcarVariosComoPago(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoIds = formData.getAll("alunoIds").map(String);
+  if (!alunoIds.length) return;
+
+  const { data: alunos } = await supabase
+    .from("alunos")
+    .select("id, pagamento_valor")
+    .in("id", alunoIds)
+    .eq("personal_id", personal.id);
+
+  const hoje = new Date();
+  const proximoVencimento = new Date(hoje);
+  proximoVencimento.setDate(proximoVencimento.getDate() + 30);
+
+  const linhas = (alunos ?? []).map((a) => ({
+    aluno_id: a.id,
+    valor: a.pagamento_valor ?? 0,
+    data_pagamento: hoje.toISOString().slice(0, 10),
+    forma_pagamento: "Pix",
+    proximo_vencimento: proximoVencimento.toISOString().slice(0, 10),
+    registrado_por: personal.id,
+  }));
+  if (linhas.length) await supabase.from("pagamentos").insert(linhas);
+
+  revalidatePath("/financeiro");
+  revalidatePath("/alunos");
+  revalidatePath("/dashboard");
+}
+
+// Lembrete genérico em lote (ex.: aderência em queda) — cobrança de
+// pagamento tem sua própria ação (lembretePagamento, seção 3.3).
+export async function enviarLembreteEmLote(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoIds = formData.getAll("alunoIds").map(String);
+  if (!alunoIds.length) return;
+
+  const { data: alunos } = await supabase.from("alunos").select("id").in("id", alunoIds).eq("personal_id", personal.id);
+
+  await Promise.all(
+    (alunos ?? []).map((a) =>
+      notificarAluno(a.id, {
+        tipo: "lembrete_personal",
+        titulo: "Seu personal quer saber como você está",
+        mensagem: "Faz um tempo que você não treina ou atualiza seus dados — dá uma olhada quando puder.",
+        link: "/home",
+      })
+    )
+  );
+
+  revalidatePath("/alunos");
 }

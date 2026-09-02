@@ -1,9 +1,10 @@
 import { getAulasDoCiclo, getCicloAtivo, getExerciciosDaAula } from "@/lib/data/aluno";
+import { createClient } from "@/lib/supabase/server";
 import { Card, CardSubtitle, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDataBR, statusCiclo } from "@/lib/status";
-import { Edit3 } from "lucide-react";
+import { Edit3, GitBranch } from "lucide-react";
 
 export async function TreinoTab({ alunoId }: { alunoId: string }) {
   const ciclo = await getCicloAtivo(alunoId);
@@ -11,6 +12,26 @@ export async function TreinoTab({ alunoId }: { alunoId: string }) {
   const aulasComExercicios = await Promise.all(
     aulas.map(async (a) => ({ aula: a, exercicios: await getExerciciosDaAula(a.id) }))
   );
+
+  let origem: string | null = null;
+  if (ciclo?.origem_template_id || ciclo?.origem_aluno_id) {
+    const supabase = await createClient();
+    if (ciclo.origem_template_id) {
+      const { data } = await supabase
+        .from("templates")
+        .select("nome")
+        .eq("id", ciclo.origem_template_id)
+        .maybeSingle();
+      if (data) origem = `Aplicado do template "${data.nome}"`;
+    } else if (ciclo.origem_aluno_id) {
+      const { data } = await supabase
+        .from("alunos")
+        .select("nome")
+        .eq("id", ciclo.origem_aluno_id)
+        .maybeSingle();
+      if (data) origem = `Duplicado do treino de ${data.nome}`;
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -22,6 +43,11 @@ export async function TreinoTab({ alunoId }: { alunoId: string }) {
               <CardSubtitle>
                 {ciclo.duracao_semanas} semanas · término {formatDataBR(ciclo.data_fim)}
               </CardSubtitle>
+            )}
+            {origem && (
+              <p className="mt-1 flex items-center gap-1 text-xs text-muted">
+                <GitBranch size={12} /> {origem}
+              </p>
             )}
           </div>
           {ciclo && <Badge status={statusCiclo(ciclo.data_fim)} />}

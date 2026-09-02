@@ -35,7 +35,22 @@ export default async function MeuProgressoPage() {
           <Card>
             <CardTitle>Evolução de carga</CardTitle>
             <CardSubtitle className="mb-2">{cargaChart.exercicioNome}</CardSubtitle>
-            <SimpleLineChart data={cargaChart.pontos} color="var(--success)" unidade="kg" />
+            <SimpleLineChart data={cargaChart.pontos} color="var(--success)" unidade="kg" tendenciaDelta="maior_melhor" />
+            {(() => {
+              const pontos = cargaChart.pontos;
+              if (pontos.length < 2) return null;
+              const primeiro = pontos[0].valor;
+              const ultimo = pontos[pontos.length - 1].valor;
+              if (primeiro <= 0) return null;
+              const variacao = Math.round(((ultimo - primeiro) / primeiro) * 100);
+              if (variacao === 0) return null;
+              return (
+                <p className="mt-3 text-sm text-foreground/90">
+                  {variacao > 0 ? "📈" : "📉"} Sua carga em {cargaChart.exercicioNome}{" "}
+                  {variacao > 0 ? "subiu" : "caiu"} <strong>{Math.abs(variacao)}%</strong> nesse período.
+                </p>
+              );
+            })()}
           </Card>
         )}
 

@@ -23,6 +23,69 @@ export async function getAulasDoCiclo(cicloId: string): Promise<Aula[]> {
   return (data as Aula[]) ?? [];
 }
 
+export interface SugestaoRenovacao {
+  aulaExercicioId: string;
+  aulaNome: string;
+  exercicioNome: string;
+  cargaAtual: number | null;
+  cargaSugerida: number | null;
+  subiu: boolean;
+}
+
+/** Renovação com progressão sugerida (handoff 3.2), regra MVP: se a última
+ * execução registrada ficou acima da carga_inicial do exercício, sugere +5%
+ * (arredondado ao 0.5kg mais próximo); senão mantém a carga atual. Não tenta
+ * detectar estagnação prolongada ou risco de sobrecarga — fica pro v2. */
+export async function getSugestoesRenovacao(cicloId: string): Promise<SugestaoRenovacao[]> {
+  const supabase = await createClient();
+
+  const { data: aulas } = await supabase.from("aulas").select("id, nome").eq("ciclo_id", cicloId);
+  const aulaIds = (aulas ?? []).map((a) => a.id);
+  if (!aulaIds.length) return [];
+  const nomeAula = new Map((aulas ?? []).map((a) => [a.id, a.nome]));
+
+  const { data: aulaExercicios } = await supabase
+    .from("aula_exercicios")
+    .select("id, aula_id, carga_inicial, exercicios(nome)")
+    .in("aula_id", aulaIds)
+    .eq("tipo", "forca")
+    .not("carga_inicial", "is", null);
+
+  const aeIds = (aulaExercicios ?? []).map((ae) => ae.id);
+  const { data: execs } = aeIds.length
+    ? await supabase
+        .from("execucoes")
+        .select("aula_exercicio_id, carga, data")
+        .in("aula_exercicio_id", aeIds)
+        .not("carga", "is", null)
+        .order("data", { ascending: false })
+    : { data: [] as { aula_exercicio_id: string; carga: number; data: string }[] };
+
+  const ultimaCargaPorAulaExercicio = new Map<string, number>();
+  for (const e of execs ?? []) {
+    if (!ultimaCargaPorAulaExercicio.has(e.aula_exercicio_id)) {
+      ultimaCargaPorAulaExercicio.set(e.aula_exercicio_id, Number(e.carga));
+    }
+  }
+
+  return ((aulaExercicios ?? []) as unknown as { id: string; aula_id: string; carga_inicial: number | null; exercicios: { nome: string } | null }[]).map(
+    (ae) => {
+      const cargaAtual = ae.carga_inicial !== null ? Number(ae.carga_inicial) : null;
+      const ultimaCarga = ultimaCargaPorAulaExercicio.get(ae.id) ?? null;
+      const subiu = cargaAtual !== null && ultimaCarga !== null && ultimaCarga > cargaAtual;
+      const cargaSugerida = subiu && cargaAtual !== null ? Math.round(cargaAtual * 1.05 * 2) / 2 : cargaAtual;
+      return {
+        aulaExercicioId: ae.id,
+        aulaNome: nomeAula.get(ae.aula_id) ?? "",
+        exercicioNome: ae.exercicios?.nome ?? "Exercício",
+        cargaAtual,
+        cargaSugerida,
+        subiu,
+      };
+    }
+  );
+}
+
 /** "Aula do dia": se o personal vinculou dias da semana a alguma aula do ciclo,
  * usa isso (e pode não haver aula hoje — dia de descanso).
  *
@@ -149,6 +212,55 @@ export async function getUltimaMarca(
     .maybeSingle();
 
   return { carga: data.carga, repeticoes: maxRep?.repeticoes ?? data.repeticoes };
+}
+
+/** Séries já registradas hoje para esse exercício — usado pra restaurar o
+ * progresso da execução se o aluno sair do app no meio do treino e voltar. */
+export async function getExecucoesDeHoje(
+  alunoId: string,
+  aulaExercicioId: string
+): Promise<Record<number, { carga: number | null; repeticoes: number | null }>> {
+  const supabase = await createClient();
+  const hojeInicio = new Date();
+  hojeInicio.setHours(0, 0, 0, 0);
+
+  const { data } = await supabase
+    .from("execucoes")
+    .select("serie_numero, carga, repeticoes")
+    .eq("aluno_id", alunoId)
+    .eq("aula_exercicio_id", aulaExercicioId)
+    .gte("data", hojeInicio.toISOString());
+
+  const porSerie: Record<number, { carga: number | null; repeticoes: number | null }> = {};
+  for (const row of data ?? []) {
+    porSerie[row.serie_numero] = { carga: row.carga, repeticoes: row.repeticoes };
+  }
+  return porSerie;
+}
+
+/** Início do treino de hoje pra essa aula (primeira série registrada hoje em
+ * qualquer exercício dela) — usado pro cronômetro ao vivo na execução, pra ele
+ * continuar contando certo mesmo se o aluno sair e voltar no meio do treino. */
+export async function getInicioTreinoHoje(alunoId: string, aulaId: string): Promise<string | null> {
+  const supabase = await createClient();
+  const exercicios = await getExerciciosDaAula(aulaId);
+  const ids = exercicios.map((e) => e.id);
+  if (ids.length === 0) return null;
+
+  const hojeInicio = new Date();
+  hojeInicio.setHours(0, 0, 0, 0);
+
+  const { data } = await supabase
+    .from("execucoes")
+    .select("data")
+    .eq("aluno_id", alunoId)
+    .in("aula_exercicio_id", ids)
+    .gte("data", hojeInicio.toISOString())
+    .order("data", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+
+  return data?.data ?? null;
 }
 
 export async function getExecucoesRecentes(

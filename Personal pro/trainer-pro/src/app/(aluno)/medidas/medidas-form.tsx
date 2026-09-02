@@ -1,13 +1,19 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { salvarMedidas } from "@/app/actions/medidas";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
-import { Camera } from "lucide-react";
+import { Camera, Check } from "lucide-react";
+
+// tem que ficar abaixo do bodySizeLimit do Server Action (next.config.ts) —
+// deixa folga pro overhead do multipart/form-data.
+const TAMANHO_MAXIMO_BYTES = 14 * 1024 * 1024;
 
 export function MedidasForm() {
   const [state, formAction, pending] = useActionState(salvarMedidas, undefined);
+  const [nomeFoto, setNomeFoto] = useState<string | null>(null);
+  const [erroTamanho, setErroTamanho] = useState<string | null>(null);
 
   return (
     <form action={formAction} className="space-y-3">
@@ -34,12 +40,32 @@ export function MedidasForm() {
         <Field label="Coxa esquerda"><Input type="number" step="0.1" name="coxa_esquerda" /></Field>
       </div>
 
-      <Field label="Foto de progresso (opcional)">
+      <Field
+        label="Foto de progresso (opcional)"
+        hint="Dica: tire de frente, com a mesma roupa, no mesmo horário e com a mesma luz sempre — isso deixa a comparação ao longo do tempo muito mais confiável."
+      >
         <label className="flex h-24 w-full cursor-pointer flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border text-muted">
-          <Camera size={20} />
-          <span className="text-xs">Adicionar foto</span>
-          <input type="file" name="foto" accept="image/*" className="hidden" />
+          {nomeFoto ? <Check size={20} className="text-success" /> : <Camera size={20} />}
+          <span className="max-w-[90%] truncate text-xs">{nomeFoto ?? "Adicionar foto"}</span>
+          <input
+            type="file"
+            name="foto"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+              if (arquivo && arquivo.size > TAMANHO_MAXIMO_BYTES) {
+                setErroTamanho("Essa foto é muito grande (máx. 14MB). Tente tirar com menos qualidade ou escolher outra.");
+                setNomeFoto(null);
+                e.target.value = "";
+                return;
+              }
+              setErroTamanho(null);
+              setNomeFoto(arquivo?.name ?? null);
+            }}
+          />
         </label>
+        {erroTamanho && <p className="mt-1 text-xs text-danger">{erroTamanho}</p>}
       </Field>
 
       {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}

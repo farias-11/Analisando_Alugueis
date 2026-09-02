@@ -18,14 +18,31 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
   const trintaDiasAtras = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
   const sessentaDiasAtras = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10);
 
-  // Peso: primeira e última medida dos últimos 30 dias
-  const { data: medidas } = await supabase
-    .from("medidas")
-    .select("peso, data")
-    .eq("aluno_id", alunoId)
-    .gte("data", trintaDiasAtras)
-    .not("peso", "is", null)
-    .order("data", { ascending: true });
+  // as três consultas abaixo (peso, carga atual, carga anterior) e a busca do
+  // ciclo ativo não dependem umas das outras — rodam em paralelo
+  const [{ data: medidas }, { data: execAtual }, { data: execAnterior }, { data: ciclo }] = await Promise.all([
+    supabase
+      .from("medidas")
+      .select("peso, data")
+      .eq("aluno_id", alunoId)
+      .gte("data", trintaDiasAtras)
+      .not("peso", "is", null)
+      .order("data", { ascending: true }),
+    supabase
+      .from("execucoes")
+      .select("carga")
+      .eq("aluno_id", alunoId)
+      .gte("data", trintaDiasAtras)
+      .not("carga", "is", null),
+    supabase
+      .from("execucoes")
+      .select("carga")
+      .eq("aluno_id", alunoId)
+      .gte("data", sessentaDiasAtras)
+      .lt("data", trintaDiasAtras)
+      .not("carga", "is", null),
+    supabase.from("ciclos").select("id").eq("aluno_id", alunoId).eq("ativo", true).maybeSingle(),
+  ]);
 
   let pesoDeltaKg: number | null = null;
   if (medidas && medidas.length >= 2) {
@@ -33,22 +50,6 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
   }
   const pesoTendencia: Tendencia =
     pesoDeltaKg === null ? "neutra" : pesoDeltaKg < -0.2 ? "positiva" : pesoDeltaKg > 0.2 ? "negativa" : "neutra";
-
-  // Carga média: execuções dos últimos 30 dias vs. 30 dias anteriores
-  const { data: execAtual } = await supabase
-    .from("execucoes")
-    .select("carga")
-    .eq("aluno_id", alunoId)
-    .gte("data", trintaDiasAtras)
-    .not("carga", "is", null);
-
-  const { data: execAnterior } = await supabase
-    .from("execucoes")
-    .select("carga")
-    .eq("aluno_id", alunoId)
-    .gte("data", sessentaDiasAtras)
-    .lt("data", trintaDiasAtras)
-    .not("carga", "is", null);
 
   const media = (rows: { carga: number | null }[] | null) =>
     rows && rows.length ? rows.reduce((s, r) => s + Number(r.carga), 0) / rows.length : null;
@@ -66,23 +67,17 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
   // Aderência: sessões de treino (aula x dia) nos últimos 30 dias vs. meta
   // (aulas por semana do ciclo x ~4.3 semanas). Conta sessões, não só quais
   // aulas já foram feitas ao menos uma vez — senão o teto ficaria em ~23%.
-  const { data: ciclo } = await supabase
-    .from("ciclos")
-    .select("id")
-    .eq("aluno_id", alunoId)
-    .eq("ativo", true)
-    .maybeSingle();
-
   let aderenciaPct = 0;
   if (ciclo) {
-    const { data: aulas } = await supabase.from("aulas").select("id").eq("ciclo_id", ciclo.id);
+    const [{ data: aulas }, { data: execs }] = await Promise.all([
+      supabase.from("aulas").select("id").eq("ciclo_id", ciclo.id),
+      supabase
+        .from("execucoes")
+        .select("data, aula_exercicios(aula_id)")
+        .eq("aluno_id", alunoId)
+        .gte("data", trintaDiasAtras),
+    ]);
     const metaSessoes = Math.max((aulas?.length ?? 0) * 4.3, 1);
-
-    const { data: execs } = await supabase
-      .from("execucoes")
-      .select("data, aula_exercicios(aula_id)")
-      .eq("aluno_id", alunoId)
-      .gte("data", trintaDiasAtras);
 
     const sessoesFeitas = new Set(
       ((execs ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[])

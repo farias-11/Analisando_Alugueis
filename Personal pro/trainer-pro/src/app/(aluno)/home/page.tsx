@@ -12,6 +12,7 @@ import { diasDesde } from "@/lib/status";
 import { Card, CardSubtitle, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { EvolutionSummary } from "@/components/evolution-summary";
+import { InstallPromptBanner } from "@/components/install-prompt-banner";
 import { AlertTriangle, CheckCircle2, ChevronRight, Flame } from "lucide-react";
 import Link from "next/link";
 
@@ -19,27 +20,31 @@ export default async function HomePage() {
   const { aluno } = await requireAluno();
   const supabase = await createClient();
 
-  const ciclo = await getCicloAtivo(aluno.id);
-  const aulas = ciclo ? await getAulasDoCiclo(ciclo.id) : [];
-  const aulaHoje = await aulaDoDia(aluno.id, aulas);
-  const jaFezHoje = aulaHoje ? await aulaConcluidaHoje(aluno.id, aulaHoje.id) : false;
-  const { concluidas, meta } = await getAderenciaSemana(aluno.id);
-  const resumo = await getResumoEvolucao(aluno.id);
+  // as quatro buscas abaixo são independentes entre si — só o treino de hoje
+  // tem uma cadeia interna (ciclo -> aulas -> aula do dia -> já fez) — então
+  // rodam em paralelo em vez de esperar uma pela outra.
+  const [{ ciclo, aulaHoje, jaFezHoje }, { concluidas, meta }, resumo, anamnese] = await Promise.all([
+    (async () => {
+      const ciclo = await getCicloAtivo(aluno.id);
+      const aulas = ciclo ? await getAulasDoCiclo(ciclo.id) : [];
+      const aulaHoje = await aulaDoDia(aluno.id, aulas);
+      const jaFezHoje = aulaHoje ? await aulaConcluidaHoje(aluno.id, aulaHoje.id) : false;
+      return { ciclo, aulaHoje, jaFezHoje };
+    })(),
+    getAderenciaSemana(aluno.id),
+    getResumoEvolucao(aluno.id),
+    aluno.anamnese_ativa
+      ? supabase.from("anamneses").select("concluida").eq("aluno_id", aluno.id).maybeSingle()
+      : Promise.resolve(null),
+  ]);
 
   const pendencias: { texto: string; href: string }[] = [];
   const diasSemMedidas = diasDesde(aluno.ultima_atualizacao_medidas);
   if (diasSemMedidas === null || diasSemMedidas > 14) {
     pendencias.push({ texto: "Insira suas medidas", href: "/medidas" });
   }
-  if (aluno.anamnese_ativa) {
-    const { data: anamnese } = await supabase
-      .from("anamneses")
-      .select("concluida")
-      .eq("aluno_id", aluno.id)
-      .maybeSingle();
-    if (!anamnese?.concluida) {
-      pendencias.push({ texto: "Preencha sua anamnese", href: "/anamnese" });
-    }
+  if (aluno.anamnese_ativa && !anamnese?.data?.concluida) {
+    pendencias.push({ texto: "Preencha sua anamnese", href: "/anamnese" });
   }
 
   const primeiroNome = aluno.nome.split(" ")[0];
@@ -51,6 +56,8 @@ export default async function HomePage() {
         <p className="text-sm text-muted">Olá,</p>
         <h1 className="text-2xl font-bold">{primeiroNome}!</h1>
       </div>
+
+      <InstallPromptBanner />
 
       <Card className={jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}>
         {aulaHoje && jaFezHoje ? (
@@ -103,6 +110,7 @@ export default async function HomePage() {
             <Link
               key={p.href}
               href={p.href}
+              prefetch={false}
               className="flex items-center justify-between rounded-xl border border-warning/30 bg-warning-soft px-3.5 py-3 text-sm font-medium text-warning"
             >
               <span className="flex items-center gap-2">

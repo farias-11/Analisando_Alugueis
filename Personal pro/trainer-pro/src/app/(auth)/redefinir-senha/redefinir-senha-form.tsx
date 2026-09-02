@@ -10,10 +10,10 @@ export function RedefinirSenhaForm() {
 
   return (
     <form action={formAction} className="space-y-4">
-      <Field label="Nova senha">
+      <Field label="Nova senha" hint="Mínimo de 8 caracteres, com pelo menos 1 letra maiúscula e 1 número.">
         <Input type="password" name="senha" minLength={8} required autoComplete="new-password" />
       </Field>
-      <Field label="Confirmar nova senha" hint="Mínimo de 8 caracteres.">
+      <Field label="Confirmar nova senha">
         <Input type="password" name="confirmarSenha" minLength={8} required autoComplete="new-password" />
       </Field>
       {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}

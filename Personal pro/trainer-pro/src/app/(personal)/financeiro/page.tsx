@@ -1,11 +1,19 @@
 import { requirePersonal } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { marcarComoPago } from "@/app/actions/alunos";
-import { formatDataBR, formatMoedaBR, statusPagamentoExibicao } from "@/lib/status";
+import { formatDataBR, formatMoedaBR } from "@/lib/status";
+import { FinanceiroListaSelecionavel } from "@/components/financeiro-lista-selecionavel";
+import { SimpleLineChart } from "@/components/charts/simple-line-chart";
+import { ExportarCsvButton } from "@/components/exportar-csv-button";
 import Link from "next/link";
+
+type PagamentoComAluno = {
+  id: string;
+  valor: number;
+  data_pagamento: string;
+  forma_pagamento: string;
+  alunos: { nome: string } | null;
+};
 
 export default async function FinanceiroPage({
   searchParams,
@@ -17,30 +25,71 @@ export default async function FinanceiroPage({
   const supabase = await createClient();
 
   if (aba === "recebidos") {
-    const { data: pagamentos } = await supabase
+    // filtra por personal_id direto na tabela relacionada (join !inner) em vez
+    // de buscar os ids dos alunos numa query separada antes — evita uma ida
+    // ao banco sequencial só pra montar o filtro da próxima
+    const { data: pagamentosData } = await supabase
       .from("pagamentos")
-      .select("*, alunos(nome)")
-      .in(
-        "aluno_id",
-        (
-          await supabase.from("alunos").select("id").eq("personal_id", personal.id)
-        ).data?.map((a) => a.id) ?? []
-      )
+      .select("*, alunos!inner(nome, personal_id)")
+      .eq("alunos.personal_id", personal.id)
       .order("data_pagamento", { ascending: false })
-      .limit(50);
+      .limit(200);
 
-    const total = (pagamentos ?? []).reduce((s, p) => s + Number(p.valor), 0);
+    const pagamentos = (pagamentosData ?? []) as unknown as PagamentoComAluno[];
+    const total = pagamentos.reduce((s, p) => s + Number(p.valor), 0);
+    const alunosPagantes = new Set(pagamentos.map((p) => p.alunos?.nome)).size;
+    const ticketMedio = alunosPagantes > 0 ? total / alunosPagantes : 0;
+
+    // receita mês a mês (últimos 6 meses com pagamento) — a partir do mesmo
+    // conjunto já carregado, sem consulta extra
+    const porMes = new Map<string, number>();
+    for (const p of pagamentos) {
+      const chave = p.data_pagamento.slice(0, 7); // "AAAA-MM"
+      porMes.set(chave, (porMes.get(chave) ?? 0) + Number(p.valor));
+    }
+    const mesesOrdenados = Array.from(porMes.keys()).sort().slice(-6);
+    const NOMES_MES = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
+    const receitaPorMes = mesesOrdenados.map((chave) => {
+      const [ano, mes] = chave.split("-");
+      return { data: `${NOMES_MES[Number(mes) - 1]}/${ano.slice(2)}`, valor: Math.round(porMes.get(chave)! * 100) / 100 };
+    });
 
     return (
       <div className="space-y-4 p-4 md:p-0">
         <h1 className="text-xl font-bold">Financeiro</h1>
         <Abas aba={aba} />
-        <Card>
-          <p className="text-xs text-muted">Total recebido (últimos registros)</p>
-          <p className="text-2xl font-bold">{formatMoedaBR(total)}</p>
-        </Card>
+
+        {receitaPorMes.length > 1 && (
+          <Card>
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Receita mês a mês</p>
+            <SimpleLineChart data={receitaPorMes} tendenciaDelta="maior_melhor" formatarValor={formatMoedaBR} />
+          </Card>
+        )}
+
+        <div className="grid grid-cols-2 gap-3">
+          <Card>
+            <p className="text-xs text-muted">Total recebido</p>
+            <p className="text-xl font-bold">{formatMoedaBR(total)}</p>
+          </Card>
+          <Card>
+            <p className="text-xs text-muted">Ticket médio por aluno</p>
+            <p className="text-xl font-bold">{formatMoedaBR(ticketMedio)}</p>
+          </Card>
+        </div>
+
+        <div className="flex justify-end">
+          <ExportarCsvButton
+            linhas={pagamentos.map((p) => ({
+              aluno: p.alunos?.nome ?? "—",
+              data: p.data_pagamento,
+              forma: p.forma_pagamento,
+              valor: Number(p.valor),
+            }))}
+          />
+        </div>
+
         <div className="space-y-2">
-          {((pagamentos ?? []) as unknown as { id: string; valor: number; data_pagamento: string; forma_pagamento: string; alunos: { nome: string } | null }[]).map((p) => (
+          {pagamentos.map((p) => (
             <Card key={p.id} className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold">{p.alunos?.nome}</p>
@@ -51,19 +100,20 @@ export default async function FinanceiroPage({
               <p className="text-sm font-semibold">{formatMoedaBR(p.valor)}</p>
             </Card>
           ))}
-          {(!pagamentos || pagamentos.length === 0) && (
-            <p className="text-sm text-muted">Nenhum pagamento registrado ainda.</p>
-          )}
+          {pagamentos.length === 0 && <p className="text-sm text-muted">Nenhum pagamento registrado ainda.</p>}
         </div>
       </div>
     );
   }
 
+  // convite pendente não conta como aluno ativo pra cobrança — ele ainda nem
+  // acessou o app, não faz sentido aparecer devendo mensalidade
   const { data: alunos } = await supabase
     .from("alunos")
     .select("*")
     .eq("personal_id", personal.id)
     .eq("status", "ativo")
+    .eq("status_convite", "aceito")
     .order("pagamento_status", { ascending: false });
 
   const totalReceber = (alunos ?? [])
@@ -80,58 +130,7 @@ export default async function FinanceiroPage({
         <p className="text-2xl font-bold text-danger">{formatMoedaBR(totalReceber)}</p>
       </Card>
 
-      <div className="space-y-2">
-        {(alunos ?? []).map((a) => (
-          <Card key={a.id}>
-            <div className="flex items-center justify-between">
-              <div>
-                <Link href={`/alunos/${a.id}`} className="text-sm font-semibold">
-                  {a.nome}
-                </Link>
-                <p className="text-xs text-muted">
-                  {formatMoedaBR(a.pagamento_valor)} · vence {formatDataBR(a.pagamento_vencimento)}
-                </p>
-              </div>
-              <Badge status={statusPagamentoExibicao(a)} />
-            </div>
-            <details className="mt-2">
-              <summary className="cursor-pointer text-sm font-medium text-primary">
-                Marcar como pago
-              </summary>
-              <form action={marcarComoPago} className="mt-2 space-y-2">
-                <input type="hidden" name="alunoId" value={a.id} />
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="number"
-                    step="0.01"
-                    name="valor"
-                    required
-                    defaultValue={a.pagamento_valor ?? ""}
-                    placeholder="Valor"
-                    className="h-10 rounded-lg border border-border px-2.5 text-sm"
-                  />
-                  <input
-                    type="date"
-                    name="dataPagamento"
-                    required
-                    defaultValue={new Date().toISOString().slice(0, 10)}
-                    className="h-10 rounded-lg border border-border px-2.5 text-sm"
-                  />
-                </div>
-                <select name="formaPagamento" required className="h-10 w-full rounded-lg border border-border px-2.5 text-sm">
-                  <option value="Pix">Pix</option>
-                  <option value="Dinheiro">Dinheiro</option>
-                  <option value="Cartão">Cartão</option>
-                  <option value="Transferência">Transferência</option>
-                </select>
-                <Button type="submit" size="sm" className="w-full">
-                  Confirmar pagamento
-                </Button>
-              </form>
-            </details>
-          </Card>
-        ))}
-      </div>
+      <FinanceiroListaSelecionavel alunos={alunos ?? []} />
     </div>
   );
 }

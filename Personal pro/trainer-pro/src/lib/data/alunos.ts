@@ -9,7 +9,15 @@ export interface AlunoComTreino extends Aluno {
 
 export async function listarAlunos(
   personalId: string,
-  filtros?: { q?: string; pagamento?: string; treino?: string; status?: string; avaliacao?: string }
+  filtros?: {
+    q?: string;
+    pagamento?: string;
+    treino?: string;
+    status?: string;
+    avaliacao?: string;
+    semCheckin?: string;
+    ordenar?: string;
+  }
 ): Promise<AlunoComTreino[]> {
   const supabase = await createClient();
 
@@ -37,11 +45,39 @@ export async function listarAlunos(
   if (filtros?.treino) {
     comTreino = comTreino.filter((a) => a.statusTreino === filtros.treino);
   }
+  if (filtros?.semCheckin === "30") {
+    comTreino = comTreino.filter((a) => {
+      const dias = diasDesde(a.ultima_atualizacao_medidas);
+      return dias === null || dias >= 30;
+    });
+  }
   if (filtros?.avaliacao === "pendente") {
     const pendentes = await alunosComAvaliacaoPendente(comTreino);
     comTreino = comTreino.filter((a) => pendentes.has(a.id));
   }
+
+  if (filtros?.ordenar === "urgencia") {
+    comTreino = comTreino.slice().sort((a, b) => pontuarUrgencia(b) - pontuarUrgencia(a));
+  }
+
   return comTreino;
+}
+
+// Pontuação simples pra ordenar a lista por urgência (handoff, seção 4):
+// atraso de pagamento pesa mais que treino vencido, que pesa mais que sem
+// check-in — dentro de cada aluno os pesos só se somam, não competem entre
+// si. Mesma ideia (não a mesma função) do radar de prioridades do dashboard,
+// que também cruza tickets — aqui fica só com o que a listagem já carrega,
+// pra não pagar o custo de mais uma consulta só pra ordenar.
+function pontuarUrgencia(a: AlunoComTreino): number {
+  let pontos = 0;
+  if (a.pagamento_status === "atrasado") pontos += 30;
+  if (a.statusTreino === "vencido") pontos += 20;
+  else if (a.statusTreino === "vencendo") pontos += 10;
+  const diasSemCheckin = diasDesde(a.ultima_atualizacao_medidas);
+  if (diasSemCheckin === null) pontos += 5;
+  else pontos += Math.min(diasSemCheckin, 60) / 4;
+  return pontos;
 }
 
 /** Mesma lógica usada no dashboard: anamnese ativa sem resposta, ou

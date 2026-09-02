@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requirePersonal } from "@/lib/data/current-user";
+import { camposExercicioAula } from "@/lib/campos-exercicio-aula";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -16,6 +17,37 @@ async function assertDonoTemplate(templateId: string) {
     .maybeSingle();
   if (!template) throw new Error("Template não encontrado.");
   return { supabase, personal };
+}
+
+// mesma lógica de treinos.ts: assertDonoTemplate só garante que templateId é
+// do personal — sem isso, um templateAulaId/templateAulaExercicioId de OUTRO
+// template do mesmo personal era aceito sem checar, e a mutação ia parar no
+// template errado.
+type SupaClient = Awaited<ReturnType<typeof createClient>>;
+
+async function assertTemplateAulaDoTemplate(supabase: SupaClient, templateId: string, templateAulaId: string) {
+  const { data } = await supabase
+    .from("template_aulas")
+    .select("id")
+    .eq("id", templateAulaId)
+    .eq("template_id", templateId)
+    .maybeSingle();
+  if (!data) throw new Error("Aula não encontrada para este template.");
+}
+
+async function assertTemplateAulaExercicioDoTemplate(
+  supabase: SupaClient,
+  templateId: string,
+  templateAulaExercicioId: string
+) {
+  const { data } = await supabase
+    .from("template_aula_exercicios")
+    .select("id, template_aulas(template_id)")
+    .eq("id", templateAulaExercicioId)
+    .maybeSingle();
+  const donoId = (data as unknown as { template_aulas: { template_id: string } | null } | null)?.template_aulas
+    ?.template_id;
+  if (donoId !== templateId) throw new Error("Exercício não encontrado para este template.");
 }
 
 export type CriarTemplateState = { error?: string } | undefined;
@@ -66,6 +98,7 @@ export async function removerTemplateAula(formData: FormData) {
   const templateId = String(formData.get("templateId") || "");
   const templateAulaId = String(formData.get("templateAulaId") || "");
   const { supabase } = await assertDonoTemplate(templateId);
+  await assertTemplateAulaDoTemplate(supabase, templateId, templateAulaId);
 
   await supabase.from("template_aulas").delete().eq("id", templateAulaId);
   revalidatePath(`/templates/${templateId}`);
@@ -98,6 +131,7 @@ export async function atualizarDiasSemanaTemplateAula(formData: FormData) {
   const templateAulaId = String(formData.get("templateAulaId") || "");
   const dias = formData.getAll("dias").map(Number);
   const { supabase } = await assertDonoTemplate(templateId);
+  await assertTemplateAulaDoTemplate(supabase, templateId, templateAulaId);
 
   await supabase
     .from("template_aulas")
@@ -110,11 +144,8 @@ export async function adicionarExercicioTemplateAula(formData: FormData) {
   const templateId = String(formData.get("templateId") || "");
   const templateAulaId = String(formData.get("templateAulaId") || "");
   const exercicioId = String(formData.get("exercicioId") || "");
-  const series = Number(formData.get("series") || 3);
-  const repeticoes = String(formData.get("repeticoes") || "10-12");
-  const cargaInicial = formData.get("cargaInicial") ? Number(formData.get("cargaInicial")) : null;
-  const descansoSeg = Number(formData.get("descansoSeg") || 60);
   const { supabase } = await assertDonoTemplate(templateId);
+  await assertTemplateAulaDoTemplate(supabase, templateId, templateAulaId);
 
   const { count } = await supabase
     .from("template_aula_exercicios")
@@ -125,11 +156,28 @@ export async function adicionarExercicioTemplateAula(formData: FormData) {
     template_aula_id: templateAulaId,
     exercicio_id: exercicioId,
     ordem: count ?? 0,
-    series,
-    repeticoes,
-    carga_inicial: cargaInicial,
-    descanso_seg: descansoSeg,
+    ...camposExercicioAula(formData),
   });
+  revalidatePath(`/templates/${templateId}`);
+}
+
+// Edita um exercício já adicionado no template — mesma ideia de
+// atualizarExercicioAula, pro editor de template.
+export async function atualizarExercicioTemplateAula(formData: FormData) {
+  const templateId = String(formData.get("templateId") || "");
+  const templateAulaExercicioId = String(formData.get("templateAulaExercicioId") || "");
+  const exercicioId = String(formData.get("exercicioId") || "");
+  const { supabase } = await assertDonoTemplate(templateId);
+  await assertTemplateAulaExercicioDoTemplate(supabase, templateId, templateAulaExercicioId);
+
+  await supabase
+    .from("template_aula_exercicios")
+    .update({
+      exercicio_id: exercicioId,
+      ...camposExercicioAula(formData),
+    })
+    .eq("id", templateAulaExercicioId);
+
   revalidatePath(`/templates/${templateId}`);
 }
 
@@ -137,6 +185,7 @@ export async function removerExercicioTemplateAula(formData: FormData) {
   const templateId = String(formData.get("templateId") || "");
   const templateAulaExercicioId = String(formData.get("templateAulaExercicioId") || "");
   const { supabase } = await assertDonoTemplate(templateId);
+  await assertTemplateAulaExercicioDoTemplate(supabase, templateId, templateAulaExercicioId);
 
   await supabase.from("template_aula_exercicios").delete().eq("id", templateAulaExercicioId);
   revalidatePath(`/templates/${templateId}`);
@@ -148,6 +197,7 @@ export async function moverExercicioTemplateAula(formData: FormData) {
   const templateAulaExercicioId = String(formData.get("templateAulaExercicioId") || "");
   const direcao = String(formData.get("direcao") || "");
   const { supabase } = await assertDonoTemplate(templateId);
+  await assertTemplateAulaDoTemplate(supabase, templateId, templateAulaId);
 
   const { data: exs } = await supabase
     .from("template_aula_exercicios")
@@ -204,34 +254,48 @@ export async function criarTemplateDeAluno(formData: FormData) {
       repeticoes: string;
       carga_inicial: number | null;
       descanso_seg: number | null;
+      eh_aquecimento: boolean;
+      combina_proximo: boolean;
+      tipo: "forca" | "cardio";
+      duracao_min: number | null;
+      intensidade: string | null;
     }[];
   };
 
-  for (const aula of (ciclo.aulas as AulaOrigem[]) ?? []) {
-    const { data: templateAula } = await supabase
-      .from("template_aulas")
-      .insert({
-        template_id: template.id,
-        nome: aula.nome,
-        ordem: aula.ordem,
-        duracao_estimada_min: aula.duracao_estimada_min,
-        dias_semana: aula.dias_semana,
-      })
-      .select()
-      .single();
-    if (!templateAula) continue;
+  // cada aula (e seus exercícios) é independente das outras — roda em
+  // paralelo em vez de uma esperar a outra terminar
+  await Promise.all(
+    ((ciclo.aulas as AulaOrigem[]) ?? []).map(async (aula) => {
+      const { data: templateAula } = await supabase
+        .from("template_aulas")
+        .insert({
+          template_id: template.id,
+          nome: aula.nome,
+          ordem: aula.ordem,
+          duracao_estimada_min: aula.duracao_estimada_min,
+          dias_semana: aula.dias_semana,
+        })
+        .select()
+        .single();
+      if (!templateAula) return;
 
-    const linhas = aula.aula_exercicios.map((ex) => ({
-      template_aula_id: templateAula.id,
-      exercicio_id: ex.exercicio_id,
-      ordem: ex.ordem,
-      series: ex.series,
-      repeticoes: ex.repeticoes,
-      carga_inicial: ex.carga_inicial,
-      descanso_seg: ex.descanso_seg,
-    }));
-    if (linhas.length) await supabase.from("template_aula_exercicios").insert(linhas);
-  }
+      const linhas = aula.aula_exercicios.map((ex) => ({
+        template_aula_id: templateAula.id,
+        exercicio_id: ex.exercicio_id,
+        ordem: ex.ordem,
+        series: ex.series,
+        repeticoes: ex.repeticoes,
+        carga_inicial: ex.carga_inicial,
+        descanso_seg: ex.descanso_seg,
+        eh_aquecimento: ex.eh_aquecimento,
+        combina_proximo: ex.combina_proximo,
+        tipo: ex.tipo,
+        duracao_min: ex.duracao_min,
+        intensidade: ex.intensidade,
+      }));
+      if (linhas.length) await supabase.from("template_aula_exercicios").insert(linhas);
+    })
+  );
 
   revalidatePath("/templates");
 }
@@ -263,7 +327,11 @@ export async function aplicarTemplateAoAluno(formData: FormData) {
 
   const { data: novoCiclo, error: cicloError } = await supabase
     .from("ciclos")
-    .insert({ aluno_id: alunoId, duracao_semanas: aluno.ciclo_duracao_padrao_semanas })
+    .insert({
+      aluno_id: alunoId,
+      duracao_semanas: aluno.ciclo_duracao_padrao_semanas,
+      origem_template_id: templateId,
+    })
     .select()
     .single();
   if (cicloError || !novoCiclo) return;
@@ -280,34 +348,47 @@ export async function aplicarTemplateAoAluno(formData: FormData) {
       repeticoes: string;
       carga_inicial: number | null;
       descanso_seg: number | null;
+      eh_aquecimento: boolean;
+      combina_proximo: boolean;
+      tipo: "forca" | "cardio";
+      duracao_min: number | null;
+      intensidade: string | null;
     }[];
   };
 
-  for (const aula of (templateAulas as TemplateAula[]) ?? []) {
-    const { data: novaAula } = await supabase
-      .from("aulas")
-      .insert({
-        ciclo_id: novoCiclo.id,
-        nome: aula.nome,
-        ordem: aula.ordem,
-        duracao_estimada_min: aula.duracao_estimada_min,
-        dias_semana: aula.dias_semana,
-      })
-      .select()
-      .single();
-    if (!novaAula) continue;
+  // mesma lógica de paralelizar por aula do criarTemplateDeAluno acima
+  await Promise.all(
+    ((templateAulas as TemplateAula[]) ?? []).map(async (aula) => {
+      const { data: novaAula } = await supabase
+        .from("aulas")
+        .insert({
+          ciclo_id: novoCiclo.id,
+          nome: aula.nome,
+          ordem: aula.ordem,
+          duracao_estimada_min: aula.duracao_estimada_min,
+          dias_semana: aula.dias_semana,
+        })
+        .select()
+        .single();
+      if (!novaAula) return;
 
-    const linhas = aula.template_aula_exercicios.map((ex) => ({
-      aula_id: novaAula.id,
-      exercicio_id: ex.exercicio_id,
-      ordem: ex.ordem,
-      series: ex.series,
-      repeticoes: ex.repeticoes,
-      carga_inicial: ex.carga_inicial,
-      descanso_seg: ex.descanso_seg,
-    }));
-    if (linhas.length) await supabase.from("aula_exercicios").insert(linhas);
-  }
+      const linhas = aula.template_aula_exercicios.map((ex) => ({
+        aula_id: novaAula.id,
+        exercicio_id: ex.exercicio_id,
+        ordem: ex.ordem,
+        series: ex.series,
+        repeticoes: ex.repeticoes,
+        carga_inicial: ex.carga_inicial,
+        descanso_seg: ex.descanso_seg,
+        eh_aquecimento: ex.eh_aquecimento,
+        combina_proximo: ex.combina_proximo,
+        tipo: ex.tipo,
+        duracao_min: ex.duracao_min,
+        intensidade: ex.intensidade,
+      }));
+      if (linhas.length) await supabase.from("aula_exercicios").insert(linhas);
+    })
+  );
 
   redirect(`/alunos/${alunoId}?aba=treino`);
 }
