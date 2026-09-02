@@ -45,6 +45,7 @@ export interface Aluno {
   bioimpedancia_ativa: boolean;
   bioimpedancia_frequencia_dias: number | null;
   ciclo_duracao_padrao_semanas: number;
+  plano_id: string | null;
   pagamento_valor: number | null;
   pagamento_forma: string | null;
   pagamento_vencimento: string | null;
@@ -59,6 +60,16 @@ export interface Aluno {
   notificacoes_preferencias: NotificacoesPreferencias;
   convite_enviado_em: string;
   fotos_solicitadas: string[];
+  created_at: string;
+}
+
+export interface Plano {
+  id: string;
+  personal_id: string;
+  nome: string;
+  valor: number;
+  recorrencia_meses: number;
+  dia_pagamento: number | null;
   created_at: string;
 }
 

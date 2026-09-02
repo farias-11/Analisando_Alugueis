@@ -29,6 +29,21 @@ create type status_aluno as enum ('ativo', 'inativo');
 create type status_convite as enum ('pendente', 'aceito');
 create type status_pagamento as enum ('em_dia', 'atrasado');
 
+-- Plano de pagamento (nome, valor, recorrência e dia de vencimento) — o
+-- personal cria e reaproveita entre alunos, em vez de digitar valor solto
+-- a cada cobrança com recorrência sempre fixa em 30 dias.
+create table planos (
+  id uuid primary key default gen_random_uuid(),
+  personal_id uuid not null references personals (id) on delete cascade,
+  nome text not null,
+  valor numeric(10, 2) not null default 0,
+  recorrencia_meses int not null default 1 check (recorrencia_meses in (1, 2, 3, 4, 5, 6, 12)),
+  dia_pagamento int check (dia_pagamento between 1 and 31),
+  created_at timestamptz not null default now()
+);
+
+create index idx_planos_personal on planos (personal_id);
+
 create table alunos (
   id uuid primary key default gen_random_uuid(),
   personal_id uuid not null references personals (id) on delete cascade,
@@ -52,6 +67,7 @@ create table alunos (
   ciclo_duracao_padrao_semanas int not null default 4,
 
   -- financeiro (denormalizado para listagem rápida; histórico fica em `pagamentos`)
+  plano_id uuid references planos (id) on delete set null,
   pagamento_valor numeric(10, 2),
   pagamento_forma text,
   pagamento_vencimento date,
@@ -523,6 +539,7 @@ $$;
 
 alter table personals enable row level security;
 alter table admins enable row level security;
+alter table planos enable row level security;
 alter table alunos enable row level security;
 alter table exercicios enable row level security;
 alter table exercicio_midias enable row level security;
@@ -556,6 +573,10 @@ create policy admins_self on admins
 -- link do WhatsApp no ticket de dor e pra tela "Ajuda e suporte"
 create policy personals_aluno_select on personals
   for select using (id in (select personal_id from alunos where auth_user_id = auth.uid()));
+
+-- planos: escopo do personal
+create policy planos_personal_all on planos
+  for all using (personal_id = auth.uid()) with check (personal_id = auth.uid());
 
 -- alunos: personal tem acesso total aos próprios alunos; aluno lê o próprio registro
 create policy alunos_personal_all on alunos

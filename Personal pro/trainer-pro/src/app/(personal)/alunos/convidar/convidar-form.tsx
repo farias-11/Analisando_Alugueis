@@ -6,9 +6,11 @@ import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Input, Select, Toggle } from "@/components/ui/form";
 import { Card, CardTitle } from "@/components/ui/card";
 import { buildWhatsappLink, mensagemConvite } from "@/lib/whatsapp";
+import { formatMoedaBR } from "@/lib/status";
 import { MessageCircle } from "lucide-react";
+import type { Plano } from "@/lib/types";
 
-export function ConvidarAlunoForm({ personalNome }: { personalNome: string }) {
+export function ConvidarAlunoForm({ personalNome, planos }: { personalNome: string; planos: Plano[] }) {
   const [state, formAction, pending] = useActionState(convidarAluno, undefined);
   const [anamnese, setAnamnese] = useState(false);
   const [bioimpedancia, setBioimpedancia] = useState(false);
@@ -57,6 +59,16 @@ export function ConvidarAlunoForm({ personalNome }: { personalNome: string }) {
         </Field>
         <Field label="Objetivo principal">
           <Input name="objetivo" placeholder="Ex: Emagrecer / Ganhar massa" />
+        </Field>
+        <Field label="Plano" hint="Define o valor e a recorrência da cobrança. Dá pra trocar depois na ficha do aluno.">
+          <Select name="planoId" defaultValue="">
+            <option value="">Sem plano por enquanto</option>
+            {planos.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.nome} — {formatMoedaBR(p.valor)}
+              </option>
+            ))}
+          </Select>
         </Field>
       </Card>
 

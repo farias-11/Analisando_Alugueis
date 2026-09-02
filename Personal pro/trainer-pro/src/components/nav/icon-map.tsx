@@ -14,6 +14,7 @@ import {
   Wallet,
   Settings,
   Wrench,
+  CreditCard,
   type LucideIcon,
 } from "lucide-react";
 
@@ -32,6 +33,7 @@ export const ICON_MAP: Record<string, LucideIcon> = {
   templates: Layers,
   tickets: MessageCircleWarning,
   financeiro: Wallet,
+  planos: CreditCard,
   configuracoes: Settings,
   admin: Wrench,
 };

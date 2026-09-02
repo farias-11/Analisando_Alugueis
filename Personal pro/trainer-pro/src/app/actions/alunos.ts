@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePersonal } from "@/lib/data/current-user";
 import { notificarAluno } from "@/lib/notificar";
+import { calcularProximoVencimento } from "@/lib/planos-utils";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
@@ -84,10 +85,13 @@ export async function convidarAluno(
   const bioimpedanciaAtiva = formData.get("bioimpedanciaAtiva") === "on";
   const bioimpedanciaFrequencia = formData.get("bioimpedanciaFrequencia");
   const duracaoCiclo = Number(formData.get("duracaoCiclo") || 4);
+  const planoId = String(formData.get("planoId") || "").trim() || null;
 
   if (!nome || !email) {
     return { error: "Nome e e-mail são obrigatórios." };
   }
+
+  const plano = planoId ? (await supabase.from("planos").select("valor").eq("id", planoId).maybeSingle()).data : null;
 
   const { data: aluno, error } = await supabase
     .from("alunos")
@@ -101,6 +105,8 @@ export async function convidarAluno(
       bioimpedancia_ativa: bioimpedanciaAtiva,
       bioimpedancia_frequencia_dias: bioimpedanciaAtiva ? Number(bioimpedanciaFrequencia) || 30 : null,
       ciclo_duracao_padrao_semanas: duracaoCiclo,
+      plano_id: planoId,
+      pagamento_valor: plano?.valor ?? null,
     })
     .select()
     .single();
@@ -141,9 +147,14 @@ export async function marcarComoPago(formData: FormData) {
   const formaPagamento = String(formData.get("formaPagamento") || "");
   const observacao = String(formData.get("observacao") || "") || null;
 
-  // vencimento padrão: 30 dias após o pagamento
-  const proximoVencimento = new Date(dataPagamento + "T00:00:00");
-  proximoVencimento.setDate(proximoVencimento.getDate() + 30);
+  const { data: aluno } = await supabase
+    .from("alunos")
+    .select("planos(recorrencia_meses, dia_pagamento)")
+    .eq("id", alunoId)
+    .maybeSingle();
+  const plano = (aluno as unknown as { planos: { recorrencia_meses: number; dia_pagamento: number | null } | null } | null)
+    ?.planos;
+  const proximoVencimento = calcularProximoVencimento(dataPagamento, plano);
 
   await supabase.from("pagamentos").insert({
     aluno_id: alunoId,
@@ -151,7 +162,7 @@ export async function marcarComoPago(formData: FormData) {
     data_pagamento: dataPagamento,
     forma_pagamento: formaPagamento,
     observacao,
-    proximo_vencimento: proximoVencimento.toISOString().slice(0, 10),
+    proximo_vencimento: proximoVencimento,
     registrado_por: personal.id,
   });
 
@@ -332,20 +343,18 @@ export async function marcarVariosComoPago(formData: FormData) {
 
   const { data: alunos } = await supabase
     .from("alunos")
-    .select("id, pagamento_valor")
+    .select("id, pagamento_valor, planos(recorrencia_meses, dia_pagamento)")
     .in("id", alunoIds)
     .eq("personal_id", personal.id);
 
-  const hoje = new Date();
-  const proximoVencimento = new Date(hoje);
-  proximoVencimento.setDate(proximoVencimento.getDate() + 30);
+  const hojeStr = new Date().toISOString().slice(0, 10);
 
-  const linhas = (alunos ?? []).map((a) => ({
+  const linhas = ((alunos ?? []) as unknown as { id: string; pagamento_valor: number | null; planos: { recorrencia_meses: number; dia_pagamento: number | null } | null }[]).map((a) => ({
     aluno_id: a.id,
     valor: a.pagamento_valor ?? 0,
-    data_pagamento: hoje.toISOString().slice(0, 10),
+    data_pagamento: hojeStr,
     forma_pagamento: "Pix",
-    proximo_vencimento: proximoVencimento.toISOString().slice(0, 10),
+    proximo_vencimento: calcularProximoVencimento(hojeStr, a.planos),
     registrado_por: personal.id,
   }));
   if (linhas.length) await supabase.from("pagamentos").insert(linhas);

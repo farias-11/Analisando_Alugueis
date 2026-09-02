@@ -1,7 +1,9 @@
 import { getResumoEvolucao } from "@/lib/data/evolucao";
 import { getCicloAtivo } from "@/lib/data/aluno";
 import { getTimelineAluno } from "@/lib/data/timeline";
+import { getPlanos } from "@/lib/data/planos";
 import { TimelineAluno } from "@/components/timeline-aluno";
+import { PlanoDoAlunoSelect } from "@/components/plano-do-aluno-select";
 import { Card, CardSubtitle, CardTitle } from "@/components/ui/card";
 import { EvolutionSummary } from "@/components/evolution-summary";
 import { Badge } from "@/components/ui/badge";
@@ -27,6 +29,7 @@ export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personal
   const resumo = await getResumoEvolucao(aluno.id);
   const ciclo = await getCicloAtivo(aluno.id);
   const timeline = await getTimelineAluno(aluno.id);
+  const planos = await getPlanos(aluno.personal_id);
 
   const diasSemAtualizar = diasDesde(aluno.ultima_atualizacao_medidas);
 
@@ -157,6 +160,10 @@ export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personal
         <p className="text-sm text-muted">
           {formatMoedaBR(aluno.pagamento_valor)} · vencimento {formatDataBR(aluno.pagamento_vencimento)}
         </p>
+        <div className="mt-2 flex items-center gap-2">
+          <span className="text-xs text-muted">Plano:</span>
+          <PlanoDoAlunoSelect alunoId={aluno.id} planoIdAtual={aluno.plano_id} planos={planos} />
+        </div>
         {aluno.pagamento_status === "atrasado" && aluno.whatsapp && (
           <a
             href={buildWhatsappLink(

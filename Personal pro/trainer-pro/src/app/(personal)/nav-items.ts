@@ -10,6 +10,7 @@ export const personalSidebarItems: NavItem[] = [
   { href: "/templates", label: "Templates de treino", icon: "templates" },
   { href: "/tickets", label: "Tickets de dor", icon: "tickets" },
   { href: "/financeiro", label: "Financeiro", icon: "financeiro" },
+  { href: "/planos", label: "Planos", icon: "planos" },
   { href: "/configuracoes", label: "Configurações / conta", icon: "configuracoes" },
 ];
 
