@@ -3,6 +3,7 @@
 import { useId } from "react";
 import { Area, AreaChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { formatMoedaBR } from "@/lib/status";
 
 export interface ChartPoint {
   data: string; // rótulo curto, ex: "22/04"
@@ -14,7 +15,7 @@ export function SimpleLineChart({
   color = "var(--primary)",
   unidade = "",
   tendenciaDelta = "neutro",
-  formatarValor,
+  moeda = false,
 }: {
   data: ChartPoint[];
   color?: string;
@@ -23,12 +24,14 @@ export function SimpleLineChart({
    * peso/% gordura ficam "neutro" porque depende do objetivo do aluno (emagrecer
    * vs. hipertrofia) — não dá pra assumir que subir ou cair é "bom" sem saber. */
   tendenciaDelta?: "maior_melhor" | "menor_melhor" | "neutro";
-  /** pra casos como R$, onde a unidade vem antes do número, não depois —
-   * quando ausente, mantém o comportamento padrão (número + unidade). */
-  formatarValor?: (v: number) => string;
+  /** pra casos como R$, onde a unidade vem antes do número, não depois. Booleano
+   * (não uma função) porque este é um Client Component — uma função de
+   * formatação vinda de um Server Component (ex: a página do Financeiro) não
+   * atravessa essa fronteira, o React quebra em runtime ao tentar passar. */
+  moeda?: boolean;
 }) {
   const gradientId = useId();
-  const fmt = formatarValor ?? ((v: number) => `${v}${unidade}`);
+  const fmt = moeda ? formatMoedaBR : (v: number) => `${v}${unidade}`;
 
   if (data.length === 0) {
     return (
@@ -55,8 +58,8 @@ export function SimpleLineChart({
       <div className="mb-2 flex items-end justify-between">
         <div>
           <p className="text-2xl font-bold tabular-nums">
-            {formatarValor ? fmt(ultimo) : ultimo}
-            {!formatarValor && <span className="ml-0.5 text-sm font-medium text-muted">{unidade}</span>}
+            {moeda ? fmt(ultimo) : ultimo}
+            {!moeda && <span className="ml-0.5 text-sm font-medium text-muted">{unidade}</span>}
           </p>
           <p className="text-xs text-muted">Mais recente · {data[data.length - 1].data}</p>
         </div>
@@ -71,7 +74,7 @@ export function SimpleLineChart({
             }`}
           >
             {deltaPositivo ? <ArrowUp size={12} /> : <ArrowDown size={12} />}
-            {formatarValor ? fmt(Math.abs(delta)) : `${Math.abs(delta).toFixed(1)}${unidade}`}
+            {moeda ? fmt(Math.abs(delta)) : `${Math.abs(delta).toFixed(1)}${unidade}`}
           </span>
         )}
       </div>

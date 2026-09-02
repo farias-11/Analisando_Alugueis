@@ -62,7 +62,7 @@ export default async function FinanceiroPage({
         {receitaPorMes.length > 1 && (
           <Card>
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Receita mês a mês</p>
-            <SimpleLineChart data={receitaPorMes} tendenciaDelta="maior_melhor" formatarValor={formatMoedaBR} />
+            <SimpleLineChart data={receitaPorMes} tendenciaDelta="maior_melhor" moeda />
           </Card>
         )}
 
