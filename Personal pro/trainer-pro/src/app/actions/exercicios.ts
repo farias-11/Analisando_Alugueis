@@ -76,6 +76,70 @@ export async function criarExercicio(
   return undefined;
 }
 
+export async function atualizarExercicio(
+  _prevState: CriarExercicioState,
+  formData: FormData
+): Promise<CriarExercicioState> {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+
+  const exercicioId = String(formData.get("exercicioId") || "");
+  const nome = String(formData.get("nome") || "").trim();
+  const grupoMuscular = String(formData.get("grupoMuscular") || "").trim();
+  const instrucoes = String(formData.get("instrucoes") || "").trim() || null;
+  const midiaTipo = String(formData.get("midiaTipo") || "youtube") as "youtube" | "upload";
+  const youtubeUrl = String(formData.get("youtubeUrl") || "").trim() || null;
+  const arquivos = formData.getAll("arquivos") as File[];
+
+  if (!nome || !grupoMuscular) {
+    return { error: "Nome e grupo muscular são obrigatórios." };
+  }
+  if (midiaTipo === "youtube" && !youtubeUrl) {
+    return { error: "Cole o link do YouTube ou troque para upload de arquivo." };
+  }
+
+  const { data: exercicio, error } = await supabase
+    .from("exercicios")
+    .update({
+      nome,
+      grupo_muscular: grupoMuscular,
+      instrucoes,
+      midia_tipo: midiaTipo,
+      youtube_url: midiaTipo === "youtube" ? youtubeUrl : null,
+    })
+    .eq("id", exercicioId)
+    .eq("personal_id", personal.id)
+    .select()
+    .single();
+
+  if (error || !exercicio) {
+    return { error: "Não foi possível salvar o exercício." };
+  }
+
+  if (midiaTipo === "upload" && arquivos.some((a) => a && a.size > 0)) {
+    await Promise.all(
+      arquivos.map(async (arquivo) => {
+        if (!arquivo || arquivo.size === 0) return;
+        const path = `${exercicio.id}/${Date.now()}-${arquivo.name}`;
+        const { data: upload } = await supabase.storage
+          .from("exercicios")
+          .upload(path, arquivo, { contentType: arquivo.type });
+        if (upload) {
+          const { data: pub } = supabase.storage.from("exercicios").getPublicUrl(upload.path);
+          await supabase.from("exercicio_midias").insert({
+            exercicio_id: exercicio.id,
+            url: pub.publicUrl,
+            tipo: tipoMidia(arquivo),
+          });
+        }
+      })
+    );
+  }
+
+  revalidatePath("/biblioteca");
+  return undefined;
+}
+
 export async function excluirExercicio(formData: FormData) {
   await requirePersonal();
   const supabase = await createClient();

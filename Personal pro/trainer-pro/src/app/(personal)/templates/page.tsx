@@ -21,7 +21,7 @@ export default async function TemplatesPage() {
 
   return (
     <div className="space-y-4 p-4 md:p-0">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pr-14 md:pr-0">
         <h1 className="text-xl font-bold">Templates de treino</h1>
         <ButtonLink href="/templates/novo" size="sm" className="gap-1.5">
           <Plus size={16} /> Criar do zero

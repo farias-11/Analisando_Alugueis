@@ -249,7 +249,7 @@ export interface TicketSuporte {
   aluno_id: string | null;
   categoria: CategoriaTicketSuporte;
   descricao: string;
-  print_url: string | null;
+  print_urls: string[];
   status: StatusTicketSuporte;
   resposta_admin: string | null;
   created_at: string;

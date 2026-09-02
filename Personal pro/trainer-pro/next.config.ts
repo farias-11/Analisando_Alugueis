@@ -7,9 +7,10 @@ const nextConfig: NextConfig = {
   experimental: {
     // padrão do Next é 1MB — foto de celular real (avatar, exercício, progresso,
     // tickets) passa disso fácil. Sem isso, todo upload de imagem do app falha
-    // com erro 500 genérico assim que o arquivo é "grande" de verdade.
+    // com erro 500 genérico assim que o arquivo é "grande" de verdade. 25mb dá
+    // folga pra quem anexa várias fotos de uma vez no ticket de suporte.
     serverActions: {
-      bodySizeLimit: "15mb",
+      bodySizeLimit: "25mb",
     },
     // desde o Next 15 o cache de prefetch de rota dinâmica é 0s por padrão —
     // como quase toda rota nossa é dinâmica (usa cookies/sessão) e tem várias

@@ -1,14 +1,25 @@
 "use client";
 
 import { useActionState, useState } from "react";
-import { criarExercicio } from "@/app/actions/exercicios";
+import { criarExercicio, atualizarExercicio, type CriarExercicioState } from "@/app/actions/exercicios";
 import { Button } from "@/components/ui/button";
 import { Field, Input, Select, Textarea } from "@/components/ui/form";
 import { cn } from "@/lib/utils";
+import type { Exercicio } from "@/lib/types";
 
-export function NovoExercicioForm({ onSalvo }: { onSalvo?: () => void }) {
-  const [state, formAction, pending] = useActionState(criarExercicio, undefined);
-  const [midiaTipo, setMidiaTipo] = useState<"youtube" | "upload">("youtube");
+const GRUPOS = ["Pernas", "Glúteos", "Costas", "Peito", "Ombros", "Braços", "Abdômen", "Full Body"];
+
+function ExercicioForm({
+  action,
+  exercicio,
+  onSalvo,
+}: {
+  action: (state: CriarExercicioState, formData: FormData) => Promise<CriarExercicioState>;
+  exercicio?: Exercicio;
+  onSalvo?: () => void;
+}) {
+  const [state, formAction, pending] = useActionState(action, undefined);
+  const [midiaTipo, setMidiaTipo] = useState<"youtube" | "upload">(exercicio?.midia_tipo ?? "youtube");
 
   return (
     <form
@@ -18,25 +29,24 @@ export function NovoExercicioForm({ onSalvo }: { onSalvo?: () => void }) {
       }}
       className="space-y-3"
     >
+      {exercicio && <input type="hidden" name="exercicioId" value={exercicio.id} />}
       <Field label="Nome do exercício">
-        <Input name="nome" required placeholder="Ex: Leg Press 45°" />
+        <Input name="nome" required placeholder="Ex: Leg Press 45°" defaultValue={exercicio?.nome} />
       </Field>
       <Field label="Grupo muscular">
-        <Select name="grupoMuscular" required defaultValue="">
+        <Select name="grupoMuscular" required defaultValue={exercicio?.grupo_muscular ?? ""}>
           <option value="" disabled>
             Selecione
           </option>
-          {["Pernas", "Glúteos", "Costas", "Peito", "Ombros", "Braços", "Abdômen", "Full Body"].map(
-            (g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            )
-          )}
+          {GRUPOS.map((g) => (
+            <option key={g} value={g}>
+              {g}
+            </option>
+          ))}
         </Select>
       </Field>
       <Field label="Instruções de execução">
-        <Textarea name="instrucoes" placeholder="Como executar o movimento..." />
+        <Textarea name="instrucoes" placeholder="Como executar o movimento..." defaultValue={exercicio?.instrucoes ?? ""} />
       </Field>
 
       <div>
@@ -61,7 +71,7 @@ export function NovoExercicioForm({ onSalvo }: { onSalvo?: () => void }) {
 
       {midiaTipo === "youtube" ? (
         <Field label="Link do YouTube">
-          <Input name="youtubeUrl" placeholder="https://youtube.com/watch?v=..." />
+          <Input name="youtubeUrl" placeholder="https://youtube.com/watch?v=..." defaultValue={exercicio?.youtube_url ?? ""} />
         </Field>
       ) : (
         <Field label="Arquivos (vídeo, gif ou imagem)" hint="Você pode selecionar vários de uma vez.">
@@ -82,4 +92,12 @@ export function NovoExercicioForm({ onSalvo }: { onSalvo?: () => void }) {
       </Button>
     </form>
   );
+}
+
+export function NovoExercicioForm({ onSalvo }: { onSalvo?: () => void }) {
+  return <ExercicioForm action={criarExercicio} onSalvo={onSalvo} />;
+}
+
+export function EditarExercicioForm({ exercicio, onSalvo }: { exercicio: Exercicio; onSalvo?: () => void }) {
+  return <ExercicioForm action={atualizarExercicio} exercicio={exercicio} onSalvo={onSalvo} />;
 }

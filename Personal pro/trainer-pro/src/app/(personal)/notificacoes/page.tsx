@@ -11,7 +11,7 @@ export default async function NotificacoesPersonalPage() {
 
   return (
     <div className="space-y-4 p-4 md:p-0">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pr-14 md:pr-0">
         <h1 className="text-xl font-bold">Notificações</h1>
         {temNaoLidas && (
           <form action={marcarTodasLidasPersonal}>

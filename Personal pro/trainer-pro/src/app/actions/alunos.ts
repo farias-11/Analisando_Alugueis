@@ -12,6 +12,63 @@ export type ConvidarAlunoState =
   | { sucesso: true; alunoId: string; alunoNome: string; whatsapp: string | null; conviteLink: string }
   | undefined;
 
+type SupaClient = Awaited<ReturnType<typeof createClient>>;
+
+/** Gera o link que o personal manda pro aluno (convite ou acesso direto).
+ *
+ * "invite" só funciona pra e-mail 100% novo no Supabase Auth. Na prática
+ * isso falha toda vez que o e-mail já tem conta — o caso mais comum é um
+ * aluno excluído e recriado (ou um convite antigo reenviado): a conta no
+ * Auth continua existindo mesmo depois do aluno sumir da tabela `alunos`,
+ * então "convidar" de novo sempre dava erro genérico. Em vez de falhar,
+ * detecta esse caso (código "email_exists") e gera um link de ACESSO
+ * (magiclink) pra essa conta que já existe, vinculando o aluno atual a ela
+ * — desde que nenhum outro aluno já esteja usando essa conta.
+ */
+async function gerarLinkAcesso(
+  supabase: SupaClient,
+  alunoId: string,
+  email: string
+): Promise<{ link: string } | { erro: string }> {
+  const admin = createAdminClient();
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+
+  const { data: convite, error: erroConvite } = await admin.auth.admin.generateLink({
+    type: "invite",
+    email,
+    options: { redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar` },
+  });
+  if (!erroConvite && convite) {
+    return { link: convite.properties.action_link };
+  }
+  if (erroConvite?.code !== "email_exists") {
+    return { erro: "Não foi possível gerar o link agora. Tente de novo." };
+  }
+
+  const { data: acesso, error: erroAcesso } = await admin.auth.admin.generateLink({
+    type: "magiclink",
+    email,
+    options: { redirectTo: `${siteUrl}/auth/callback?next=/home` },
+  });
+  if (erroAcesso || !acesso) {
+    return { erro: "Esse e-mail já tem uma conta no Trainer Pro, mas não consegui gerar o link de acesso. Tente de novo." };
+  }
+
+  const authUserId = acesso.user.id;
+  const { data: outroAluno } = await supabase
+    .from("alunos")
+    .select("id")
+    .eq("auth_user_id", authUserId)
+    .neq("id", alunoId)
+    .maybeSingle();
+  if (outroAluno) {
+    return { erro: "Esse e-mail já está vinculado a outro aluno no Trainer Pro. Peça pro aluno usar outro e-mail." };
+  }
+
+  await supabase.from("alunos").update({ auth_user_id: authUserId, status_convite: "aceito" }).eq("id", alunoId);
+  return { link: acesso.properties.action_link };
+}
+
 export async function convidarAluno(
   _prevState: ConvidarAlunoState,
   formData: FormData
@@ -55,22 +112,13 @@ export async function convidarAluno(
     return { error: "Não foi possível criar o convite. Tente novamente." };
   }
 
-  const admin = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
   // WhatsApp é o canal principal do convite (handoff, seção 4): gera o link
   // sem disparar e-mail automático — o personal manda ele mesmo por WhatsApp.
   // O e-mail continua disponível, mas como opção secundária (reenviarConvite).
-  const { data: link, error: inviteError } = await admin.auth.admin.generateLink({
-    type: "invite",
-    email,
-    options: { redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar` },
-  });
-
-  if (inviteError || !link) {
+  const resultado = await gerarLinkAcesso(supabase, aluno.id, email);
+  if ("erro" in resultado) {
     // aluno já foi criado no banco — o personal pode gerar o link de novo na ficha dele
-    return {
-      error: "Aluno criado, mas não foi possível gerar o link de convite agora. Tente de novo na ficha do aluno.",
-    };
+    return { error: `Aluno criado, mas: ${resultado.erro}` };
   }
 
   revalidatePath("/alunos");
@@ -79,7 +127,7 @@ export async function convidarAluno(
     alunoId: aluno.id,
     alunoNome: aluno.nome,
     whatsapp: aluno.whatsapp,
-    conviteLink: link.properties.action_link,
+    conviteLink: resultado.link,
   };
 }
 
@@ -229,19 +277,13 @@ export async function gerarLinkConviteWhatsapp(
     .maybeSingle();
   if (!aluno) return { error: "Aluno não encontrado." };
 
-  const admin = createAdminClient();
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
-  const { data: link, error } = await admin.auth.admin.generateLink({
-    type: "invite",
-    email: aluno.email,
-    options: { redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar` },
-  });
-  if (error || !link) return { error: "Não foi possível gerar o link agora. Tente de novo." };
+  const resultado = await gerarLinkAcesso(supabase, alunoId, aluno.email);
+  if ("erro" in resultado) return { error: resultado.erro };
 
   await supabase.from("alunos").update({ convite_enviado_em: new Date().toISOString() }).eq("id", alunoId);
   revalidatePath(`/alunos/${alunoId}`);
 
-  return { conviteLink: link.properties.action_link };
+  return { conviteLink: resultado.link };
 }
 
 export async function cancelarConvite(formData: FormData) {

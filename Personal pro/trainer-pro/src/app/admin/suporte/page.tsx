@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
-import { getSignedUrl } from "@/lib/supabase/signed-url";
+import { getSignedUrls } from "@/lib/supabase/signed-url";
 import { responderTicketSuporte } from "@/app/actions/suporte";
 import { Card, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -29,12 +29,12 @@ export default async function AdminSuportePage({
   type TicketComAutor = TicketSuporte & { personals: { nome: string } | null; alunos: { nome: string } | null };
   const lista = (tickets ?? []) as unknown as TicketComAutor[];
 
-  const listaComPrint = await Promise.all(
-    lista.map(async (t) => ({
-      ...t,
-      printSignedUrl: t.print_url ? await getSignedUrl("tickets", t.print_url) : null,
-    }))
-  );
+  const todosPaths = lista.flatMap((t) => t.print_urls);
+  const urlsAssinadas = await getSignedUrls("tickets", todosPaths);
+  const listaComPrint = lista.map((t) => ({
+    ...t,
+    printSignedUrls: t.print_urls.map((path) => urlsAssinadas.get(path)).filter((url): url is string => !!url),
+  }));
 
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4">
@@ -84,9 +84,13 @@ export default async function AdminSuportePage({
               {formatDataBR(t.created_at)}
             </p>
             <p className="text-sm">{t.descricao}</p>
-            {t.printSignedUrl && (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={t.printSignedUrl} alt="Print anexado" className="mt-2 max-h-64 rounded-lg border border-border" />
+            {t.printSignedUrls.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {t.printSignedUrls.map((url, i) => (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img key={i} src={url} alt="Print anexado" className="max-h-64 rounded-lg border border-border" />
+                ))}
+              </div>
             )}
 
             {t.status === "aberto" ? (

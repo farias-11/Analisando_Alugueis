@@ -2,10 +2,12 @@ import { requirePersonal } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { NovoExercicioToggle } from "./novo-exercicio-toggle";
+import { EditarExercicioModal } from "./editar-exercicio-modal";
 import { Button } from "@/components/ui/button";
 import { excluirExercicio, importarBibliotecaPadrao } from "@/app/actions/exercicios";
-import { youtubeEmbedUrl } from "@/lib/youtube";
+import { youtubeThumbnailUrl } from "@/lib/youtube";
 import { Download, Trash2, Video } from "lucide-react";
+import type { Exercicio } from "@/lib/types";
 import Link from "next/link";
 
 export default async function BibliotecaPage({
@@ -33,7 +35,7 @@ export default async function BibliotecaPage({
 
   return (
     <div className="space-y-4 p-4 md:p-0">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 pr-14 md:pr-0">
         <h1 className="text-xl font-bold">Biblioteca de exercícios</h1>
         <div className="flex shrink-0 gap-2">
           <form action={importarBibliotecaPadrao}>
@@ -65,14 +67,17 @@ export default async function BibliotecaPage({
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {(exercicios ?? []).map((ex) => {
-          const embed = youtubeEmbedUrl(ex.youtube_url);
-          const midia = ex.exercicio_midias?.[0];
+          const thumbnail = youtubeThumbnailUrl(ex.youtube_url);
+          const midiaImagem = ex.exercicio_midias?.find((m: { tipo: string; url: string }) => m.tipo === "imagem" || m.tipo === "gif");
+          const capa = thumbnail ?? midiaImagem?.url ?? null;
           return (
             <Card key={ex.id} className="overflow-hidden p-0">
-              <div className="flex h-24 items-center justify-center bg-neutral-soft text-muted-2">
-                {embed ? <Video size={28} /> : midia ? (
+              <div className="relative flex h-24 items-center justify-center bg-neutral-soft text-muted-2">
+                {capa ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img src={midia.url} alt="" className="h-full w-full object-cover" />
+                  <img src={capa} alt="" className="h-full w-full object-cover" />
+                ) : ex.midia_tipo === "upload" && ex.exercicio_midias?.length ? (
+                  <Video size={28} />
                 ) : (
                   <span className="text-xs">Sem mídia</span>
                 )}
@@ -80,12 +85,15 @@ export default async function BibliotecaPage({
               <div className="p-3">
                 <p className="text-sm font-semibold">{ex.nome}</p>
                 <p className="text-xs text-muted">{ex.grupo_muscular}</p>
-                <form action={excluirExercicio} className="mt-2">
-                  <input type="hidden" name="exercicioId" value={ex.id} />
-                  <button type="submit" className="flex items-center gap-1 text-xs text-danger">
-                    <Trash2 size={12} /> Excluir
-                  </button>
-                </form>
+                <div className="mt-2 flex items-center gap-3">
+                  <EditarExercicioModal exercicio={ex as Exercicio} />
+                  <form action={excluirExercicio}>
+                    <input type="hidden" name="exercicioId" value={ex.id} />
+                    <button type="submit" className="flex items-center gap-1 text-xs text-danger">
+                      <Trash2 size={12} /> Excluir
+                    </button>
+                  </form>
+                </div>
               </div>
             </Card>
           );

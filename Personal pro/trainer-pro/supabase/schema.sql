@@ -383,7 +383,7 @@ create table tickets_suporte (
   aluno_id uuid references alunos (id) on delete cascade,
   categoria categoria_ticket_suporte not null default 'bug',
   descricao text not null,
-  print_url text,
+  print_urls text[] not null default '{}',
   status status_ticket_suporte not null default 'aberto',
   resposta_admin text,
   created_at timestamptz not null default now(),

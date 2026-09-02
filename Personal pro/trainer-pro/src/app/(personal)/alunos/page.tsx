@@ -24,7 +24,7 @@ export default async function ListaAlunosPage({
 
   return (
     <div className="space-y-4 p-4 md:p-0">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pr-14 md:pr-0">
         <h1 className="text-xl font-bold">Alunos</h1>
         <ButtonLink href="/alunos/convidar" size="sm" className="gap-1.5">
           <UserPlus size={16} /> Convidar
