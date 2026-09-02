@@ -6,7 +6,7 @@ import {
   getExecucoesDeHoje,
   getInicioTreinoHoje,
 } from "@/lib/data/aluno";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { TopBar } from "@/components/nav/top-bar";
 import { TreinoTimer } from "@/components/treino-timer";
 import { ExecucaoClient } from "./execucao-client";
@@ -26,17 +26,39 @@ export default async function ExecucaoExercicioPage({
 
   if (!registro) notFound();
 
-  const [ultimaMarca, exerciciosDaAula, execucoesDeHoje, inicioIso] = await Promise.all([
-    getUltimaMarca(aluno.id, aulaExercicioId),
-    getExerciciosDaAula(aulaId),
-    getExecucoesDeHoje(aluno.id, aulaExercicioId),
-    getInicioTreinoHoje(aluno.id, aulaId),
-  ]);
-
+  const exerciciosDaAula = await getExerciciosDaAula(aulaId);
   const ordem = exerciciosDaAula.map((e) => e.id);
   const posicaoAtual = ordem.indexOf(aulaExercicioId);
-  const proximoExercicioId = posicaoAtual >= 0 ? (ordem[posicaoAtual + 1] ?? null) : null;
-  const ehUltimoExercicio = posicaoAtual === ordem.length - 1;
+
+  // Bi-set/superset (handoff): o exercício "combina_proximo=true" e o
+  // seguinte na aula se fazem juntos, sem descanso entre os dois. O segundo
+  // não tem página própria — cair nele redireciona pro primeiro, que
+  // concentra a série combinada dos dois.
+  const anterior = posicaoAtual > 0 ? exerciciosDaAula[posicaoAtual - 1] : null;
+  if (anterior?.combina_proximo) {
+    redirect(`/treino/${aulaId}/exercicio/${anterior.id}`);
+  }
+
+  const parceiroId = registro.combina_proximo ? (ordem[posicaoAtual + 1] ?? null) : null;
+
+  const [ultimaMarca, execucoesDeHoje, inicioIso, parceiroRegistro, ultimaMarcaParceiro, execucoesDeHojeParceiro] =
+    await Promise.all([
+      getUltimaMarca(aluno.id, aulaExercicioId),
+      getExecucoesDeHoje(aluno.id, aulaExercicioId),
+      getInicioTreinoHoje(aluno.id, aulaId),
+      parceiroId
+        ? (getAulaExercicio(parceiroId) as Promise<
+            (AulaExercicio & { exercicio: Exercicio & { midias: ExercicioMidia[] }; aula: Aula }) | null
+          >)
+        : Promise.resolve(null),
+      parceiroId ? getUltimaMarca(aluno.id, parceiroId) : Promise.resolve(null),
+      parceiroId ? getExecucoesDeHoje(aluno.id, parceiroId) : Promise.resolve({}),
+    ]);
+
+  // pula o parceiro na numeração — ele já é coberto pela página combinada
+  const proximaPosicao = parceiroId ? posicaoAtual + 2 : posicaoAtual + 1;
+  const proximoExercicioId = proximaPosicao < ordem.length ? ordem[proximaPosicao] : null;
+  const ehUltimoExercicio = proximaPosicao >= ordem.length;
 
   return (
     <div>
@@ -52,6 +74,9 @@ export default async function ExecucaoExercicioPage({
         execucoesDeHoje={execucoesDeHoje}
         proximoExercicioId={proximoExercicioId}
         ehUltimoExercicio={ehUltimoExercicio}
+        parceiro={parceiroRegistro}
+        ultimaMarcaParceiro={ultimaMarcaParceiro}
+        execucoesDeHojeParceiro={execucoesDeHojeParceiro}
       />
     </div>
   );

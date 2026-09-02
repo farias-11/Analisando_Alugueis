@@ -8,7 +8,7 @@ import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, ChevronRight, Flame, HeartCrack, WifiOff, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
 type Registro = AulaExercicio & { exercicio: Exercicio & { midias: ExercicioMidia[] }; aula: Aula };
@@ -75,6 +75,9 @@ export function ExecucaoClient({
   execucoesDeHoje,
   proximoExercicioId,
   ehUltimoExercicio,
+  parceiro,
+  ultimaMarcaParceiro,
+  execucoesDeHojeParceiro,
 }: {
   aulaId: string;
   aulaExercicio: Registro;
@@ -82,23 +85,37 @@ export function ExecucaoClient({
   execucoesDeHoje: Record<number, ValorSerie>;
   proximoExercicioId: string | null;
   ehUltimoExercicio: boolean;
+  parceiro?: Registro | null;
+  ultimaMarcaParceiro?: { carga: number | null; repeticoes: number | null } | null;
+  execucoesDeHojeParceiro?: Record<number, ValorSerie>;
 }) {
   const router = useRouter();
   const [tab, setTab] = useState<(typeof TABS)[number]>("Geral");
   const [valoresPorSerie, setValoresPorSerie] = useState<Record<number, ValorSerie>>(execucoesDeHoje);
-  const seriesFeitas = useMemo(
-    () => Object.keys(valoresPorSerie).map(Number).filter((n) => n <= aulaExercicio.series),
-    [valoresPorSerie, aulaExercicio.series]
+  const [valoresPorSerieParceiro, setValoresPorSerieParceiro] = useState<Record<number, ValorSerie>>(
+    execucoesDeHojeParceiro ?? {}
   );
+  // num bi-set, uma série só conta como feita quando os dois lados têm valor
+  const seriesFeitas = useMemo(() => {
+    const nums = Object.keys(valoresPorSerie).map(Number).filter((n) => n <= aulaExercicio.series);
+    return parceiro ? nums.filter((n) => valoresPorSerieParceiro[n]) : nums;
+  }, [valoresPorSerie, valoresPorSerieParceiro, aulaExercicio.series, parceiro]);
   const primeiraPendente = useMemo(() => {
-    for (let i = 1; i <= aulaExercicio.series; i++) if (!valoresPorSerie[i]) return i;
+    for (let i = 1; i <= aulaExercicio.series; i++) {
+      if (!valoresPorSerie[i] || (parceiro && !valoresPorSerieParceiro[i])) return i;
+    }
     return aulaExercicio.series;
-  }, [valoresPorSerie, aulaExercicio.series]);
+  }, [valoresPorSerie, valoresPorSerieParceiro, aulaExercicio.series, parceiro]);
 
   const [serieAtual, setSerieAtual] = useState(primeiraPendente);
   const valorAtual = valoresPorSerie[serieAtual];
+  const valorAtualParceiro = valoresPorSerieParceiro[serieAtual];
   const [reps, setReps] = useState(String(valorAtual?.repeticoes ?? aulaExercicio.repeticoes.split("-")[0] ?? ""));
   const [carga, setCarga] = useState(String(valorAtual?.carga ?? aulaExercicio.carga_inicial ?? ""));
+  const [repsParceiro, setRepsParceiro] = useState(
+    String(valorAtualParceiro?.repeticoes ?? parceiro?.repeticoes.split("-")[0] ?? "")
+  );
+  const [cargaParceiro, setCargaParceiro] = useState(String(valorAtualParceiro?.carga ?? parceiro?.carga_inicial ?? ""));
   const [pending, startTransition] = useTransition();
   const [descansoAberto, setDescansoAberto] = useState(false);
   const [pendentesOffline, setPendentesOffline] = useState(0);
@@ -111,11 +128,16 @@ export function ExecucaoClient({
     checar();
   }, []);
 
-  function irParaSerie(n: number, valores: Record<number, ValorSerie>) {
+  function irParaSerie(n: number, valores: Record<number, ValorSerie>, valoresParceiro?: Record<number, ValorSerie>) {
     setSerieAtual(n);
     const v = valores[n];
     setReps(String(v?.repeticoes ?? aulaExercicio.repeticoes.split("-")[0] ?? ""));
     setCarga(String(v?.carga ?? aulaExercicio.carga_inicial ?? ""));
+    if (parceiro) {
+      const vp = (valoresParceiro ?? valoresPorSerieParceiro)[n];
+      setRepsParceiro(String(vp?.repeticoes ?? parceiro.repeticoes.split("-")[0] ?? ""));
+      setCargaParceiro(String(vp?.carga ?? parceiro.carga_inicial ?? ""));
+    }
   }
 
   const embedUrl = useMemo(
@@ -127,6 +149,8 @@ export function ExecucaoClient({
   function salvarSerie() {
     const cargaNum = carga ? Number(carga) : null;
     const repsNum = reps ? Number(reps) : null;
+    const cargaNumParceiro = parceiro ? (cargaParceiro ? Number(cargaParceiro) : null) : null;
+    const repsNumParceiro = parceiro ? (repsParceiro ? Number(repsParceiro) : null) : null;
     const serieSalva = serieAtual;
     startTransition(async () => {
       try {
@@ -138,6 +162,15 @@ export function ExecucaoClient({
           carga: cargaNum,
           repeticoes: repsNum,
         });
+        if (parceiro) {
+          await registrarSerie({
+            aulaExercicioId: parceiro.id,
+            aulaId,
+            serieNumero: serieSalva,
+            carga: cargaNumParceiro,
+            repeticoes: repsNumParceiro,
+          });
+        }
         router.refresh();
       } catch {
         enfileirarExecucao({
@@ -147,11 +180,25 @@ export function ExecucaoClient({
           carga: cargaNum,
           repeticoes: repsNum,
         });
+        if (parceiro) {
+          enfileirarExecucao({
+            aulaExercicioId: parceiro.id,
+            aulaId,
+            serieNumero: serieSalva,
+            carga: cargaNumParceiro,
+            repeticoes: repsNumParceiro,
+          });
+        }
         setPendentesOffline(obterFila().length);
       }
       const novosValores = { ...valoresPorSerie, [serieSalva]: { carga: cargaNum, repeticoes: repsNum } };
       setValoresPorSerie(novosValores);
-      if (serieSalva < aulaExercicio.series) irParaSerie(serieSalva + 1, novosValores);
+      let novosValoresParceiro = valoresPorSerieParceiro;
+      if (parceiro) {
+        novosValoresParceiro = { ...valoresPorSerieParceiro, [serieSalva]: { carga: cargaNumParceiro, repeticoes: repsNumParceiro } };
+        setValoresPorSerieParceiro(novosValoresParceiro);
+      }
+      if (serieSalva < aulaExercicio.series) irParaSerie(serieSalva + 1, novosValores, novosValoresParceiro);
       // cardio não tem "próxima série" pra descansar antes — não faz sentido
       // mostrar o cronômetro de descanso ao concluir
       if (aulaExercicio.tipo !== "cardio") setDescansoAberto(true);
@@ -161,6 +208,8 @@ export function ExecucaoClient({
   function finalizarTodas() {
     const cargaNum = carga ? Number(carga) : null;
     const repsNum = reps ? Number(reps) : null;
+    const cargaNumParceiro = parceiro ? (cargaParceiro ? Number(cargaParceiro) : null) : null;
+    const repsNumParceiro = parceiro ? (repsParceiro ? Number(repsParceiro) : null) : null;
     startTransition(async () => {
       try {
         if (!navigator.onLine) throw new Error("offline");
@@ -171,6 +220,15 @@ export function ExecucaoClient({
           carga: cargaNum,
           repeticoes: repsNum,
         });
+        if (parceiro) {
+          await registrarTodasAsSeries({
+            aulaExercicioId: parceiro.id,
+            aulaId,
+            totalSeries: aulaExercicio.series,
+            carga: cargaNumParceiro,
+            repeticoes: repsNumParceiro,
+          });
+        }
         router.refresh();
       } catch {
         enfileirarExecucao({
@@ -181,11 +239,26 @@ export function ExecucaoClient({
           repeticoes: repsNum,
           todasAsSeries: { totalSeries: aulaExercicio.series },
         });
+        if (parceiro) {
+          enfileirarExecucao({
+            aulaExercicioId: parceiro.id,
+            aulaId,
+            serieNumero: 1,
+            carga: cargaNumParceiro,
+            repeticoes: repsNumParceiro,
+            todasAsSeries: { totalSeries: aulaExercicio.series },
+          });
+        }
         setPendentesOffline(obterFila().length);
       }
       const todas: Record<number, ValorSerie> = {};
       for (let i = 1; i <= aulaExercicio.series; i++) todas[i] = { carga: cargaNum, repeticoes: repsNum };
       setValoresPorSerie(todas);
+      if (parceiro) {
+        const todasParceiro: Record<number, ValorSerie> = {};
+        for (let i = 1; i <= aulaExercicio.series; i++) todasParceiro[i] = { carga: cargaNumParceiro, repeticoes: repsNumParceiro };
+        setValoresPorSerieParceiro(todasParceiro);
+      }
       setDescansoAberto(true);
     });
   }
@@ -233,6 +306,13 @@ export function ExecucaoClient({
         )}
       </div>
 
+      {parceiro && (
+        <div className="flex items-center gap-1.5 rounded-xl bg-primary-soft px-3.5 py-2.5 text-sm font-medium text-primary-dark">
+          <Link2 size={16} /> Bi-set com {parceiro.exercicio.nome} — faça os dois sem descanso entre eles, depois
+          descanse.
+        </div>
+      )}
+
       {pendentesOffline > 0 && (
         <div className="flex items-center gap-2 rounded-xl bg-warning-soft px-3.5 py-2.5 text-sm text-warning">
           <WifiOff size={16} />
@@ -249,7 +329,14 @@ export function ExecucaoClient({
 
       {ultimaMarca?.carga || ultimaMarca?.repeticoes ? (
         <div className="rounded-xl bg-primary-soft px-3.5 py-2.5 text-sm font-medium text-primary-dark">
-          Último treino: {ultimaMarca.carga ?? "—"}kg x {ultimaMarca.repeticoes ?? "—"} reps
+          Último treino ({aulaExercicio.exercicio.nome}): {ultimaMarca.carga ?? "—"}kg x {ultimaMarca.repeticoes ?? "—"} reps
+        </div>
+      ) : null}
+
+      {parceiro && (ultimaMarcaParceiro?.carga || ultimaMarcaParceiro?.repeticoes) ? (
+        <div className="rounded-xl bg-primary-soft px-3.5 py-2.5 text-sm font-medium text-primary-dark">
+          Último treino ({parceiro.exercicio.nome}): {ultimaMarcaParceiro?.carga ?? "—"}kg x{" "}
+          {ultimaMarcaParceiro?.repeticoes ?? "—"} reps
         </div>
       ) : null}
 
@@ -345,6 +432,7 @@ export function ExecucaoClient({
             </div>
           </div>
 
+          {parceiro && <p className="text-xs font-semibold text-foreground">{aulaExercicio.exercicio.nome}</p>}
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
@@ -367,8 +455,39 @@ export function ExecucaoClient({
             </div>
           </div>
 
+          {parceiro && (
+            <>
+              <p className="text-xs font-semibold text-foreground">{parceiro.exercicio.nome}</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
+                  <input
+                    type="number"
+                    value={repsParceiro}
+                    onChange={(e) => setRepsParceiro(e.target.value)}
+                    className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1.5 block text-xs font-medium text-muted">Carga (kg)</label>
+                  <input
+                    type="number"
+                    step="0.5"
+                    value={cargaParceiro}
+                    onChange={(e) => setCargaParceiro(e.target.value)}
+                    className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
           <Button onClick={salvarSerie} disabled={pending} className="w-full">
-            {seriesFeitas.includes(serieAtual) ? "Salvar alteração nesta série" : "Finalizar série"}
+            {seriesFeitas.includes(serieAtual)
+              ? "Salvar alteração nesta série"
+              : parceiro
+                ? "Finalizar série dos dois"
+                : "Finalizar série"}
           </Button>
 
           {!todasAsSeriesFeitas && (
