@@ -4,7 +4,7 @@ import { Card, CardSubtitle, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { formatDataBR, statusCiclo } from "@/lib/status";
-import { Edit3, GitBranch } from "lucide-react";
+import { Edit3, Flame, GitBranch, Link2 } from "lucide-react";
 
 export async function TreinoTab({ alunoId }: { alunoId: string }) {
   const ciclo = await getCicloAtivo(alunoId);
@@ -61,13 +61,28 @@ export async function TreinoTab({ alunoId }: { alunoId: string }) {
         <Card key={aula.id}>
           <CardTitle className="mb-2">{aula.nome}</CardTitle>
           <div className="space-y-1.5">
-            {exercicios.map((ex) => (
-              <div key={ex.id} className="flex items-center justify-between text-sm">
-                <span>{ex.exercicio.nome}</span>
-                <span className="text-muted">
-                  {ex.series}x{ex.repeticoes}
-                  {ex.carga_inicial ? ` · ${ex.carga_inicial}kg` : ""}
-                </span>
+            {exercicios.map((ex, i) => (
+              <div key={ex.id}>
+                <div className="flex items-center justify-between text-sm">
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    {ex.exercicio.nome}
+                    {ex.eh_aquecimento && (
+                      <span className="flex items-center gap-0.5 rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                        <Flame size={10} /> Aquecimento
+                      </span>
+                    )}
+                  </span>
+                  <span className="text-muted">
+                    {ex.tipo === "cardio"
+                      ? `${ex.duracao_min ?? "—"}min${ex.intensidade ? ` · ${ex.intensidade}` : ""}`
+                      : `${ex.series}x${ex.repeticoes}${ex.carga_inicial ? ` · ${ex.carga_inicial}kg` : ""} · ${ex.descanso_seg ?? "—"}s`}
+                  </span>
+                </div>
+                {ex.combina_proximo && i < exercicios.length - 1 && (
+                  <p className="mt-0.5 flex items-center gap-1 text-[11px] text-primary">
+                    <Link2 size={11} /> Bi-set com o próximo — faz os dois sem descanso entre eles
+                  </p>
+                )}
               </div>
             ))}
             {exercicios.length === 0 && (

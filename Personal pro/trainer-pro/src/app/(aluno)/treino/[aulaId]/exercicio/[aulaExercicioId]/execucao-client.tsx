@@ -8,7 +8,7 @@ import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, ChevronRight, HeartCrack, WifiOff, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Flame, HeartCrack, WifiOff, X } from "lucide-react";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
 type Registro = AulaExercicio & { exercicio: Exercicio & { midias: ExercicioMidia[] }; aula: Aula };
@@ -238,6 +238,12 @@ export function ExecucaoClient({
           <WifiOff size={16} />
           {pendentesOffline} registro{pendentesOffline > 1 ? "s" : ""} salvo{pendentesOffline > 1 ? "s" : ""} no
           aparelho, aguardando internet pra sincronizar.
+        </div>
+      )}
+
+      {aulaExercicio.eh_aquecimento && (
+        <div className="flex items-center gap-1.5 rounded-xl bg-warning-soft px-3.5 py-2.5 text-sm font-medium text-warning">
+          <Flame size={16} /> Série de aquecimento — use uma carga mais leve antes das séries valendo.
         </div>
       )}
 

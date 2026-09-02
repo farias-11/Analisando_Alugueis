@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/nav/top-bar";
 import { TreinoTimer } from "@/components/treino-timer";
 import { Card } from "@/components/ui/card";
-import { ChevronRight, PlayCircle } from "lucide-react";
+import { ChevronRight, Flame, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -36,7 +36,14 @@ export default async function AulaPage({
                 {i + 1}
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold">{ex.exercicio.nome}</p>
+                <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                  {ex.exercicio.nome}
+                  {ex.eh_aquecimento && (
+                    <span className="flex items-center gap-0.5 rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                      <Flame size={10} /> Aquecimento
+                    </span>
+                  )}
+                </p>
                 <p className="text-xs text-muted">
                   {ex.series}x {ex.repeticoes}
                   {ex.carga_inicial ? ` · ${ex.carga_inicial}kg` : ""}
