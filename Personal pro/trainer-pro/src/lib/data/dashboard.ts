@@ -72,11 +72,30 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
   const { data: alunos } = await supabase
     .from("alunos")
     .select(
-      "id, nome, whatsapp, status, status_convite, pagamento_status, pagamento_vencimento, pagamento_valor, data_inicio, anamnese_ativa, bioimpedancia_ativa, bioimpedancia_frequencia_dias, ultima_atualizacao_medidas"
+      "id, nome, whatsapp, status, status_convite, pagamento_status, pagamento_vencimento, pagamento_valor, data_inicio, anamnese_ativa, bioimpedancia_ativa, bioimpedancia_frequencia_dias, ultima_atualizacao_medidas, planos(valor)"
     )
     .eq("personal_id", personalId);
 
-  const todosAlunos = alunos ?? [];
+  type AlunoRadar = {
+    id: string;
+    nome: string;
+    whatsapp: string | null;
+    status: string;
+    status_convite: string;
+    pagamento_status: string;
+    pagamento_vencimento: string | null;
+    pagamento_valor: number | null;
+    data_inicio: string;
+    anamnese_ativa: boolean;
+    bioimpedancia_ativa: boolean;
+    bioimpedancia_frequencia_dias: number | null;
+    ultima_atualizacao_medidas: string | null;
+    planos: { valor: number } | null;
+  };
+  const todosAlunos = ((alunos ?? []) as unknown as AlunoRadar[]).map((a) => ({
+    ...a,
+    planoValor: a.planos?.valor ?? null,
+  }));
   // convite pendente = aluno nunca acessou o app — não conta como "ativo" pra
   // essas métricas (nem pagamento pendente, nem avaliação, nem aderência),
   // senão o dashboard cobra o personal por gente que ainda nem começou
@@ -137,6 +156,7 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
 
   // --- pagamento atrasado ---
   for (const a of alunosAtivos) {
+    if (a.planoValor === 0) continue; // plano gratuito nunca cobra, não entra no radar
     const semRegistro = !a.pagamento_vencimento;
     if (a.pagamento_status !== "atrasado" && !semRegistro) continue;
     const dias = semRegistro ? (diasDesde(a.data_inicio) ?? 0) : Math.max(0, -calcDiasRestantes(a.pagamento_vencimento!));
