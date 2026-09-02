@@ -68,6 +68,15 @@ function TimerDescanso({ duracaoSeg, onFim }: { duracaoSeg: number; onFim: () =>
   );
 }
 
+function MarcaMaxima({ marca }: { marca: { carga: number | null; repeticoes: number | null } | null | undefined }) {
+  if (!marca?.carga && !marca?.repeticoes) return null;
+  return (
+    <span className="shrink-0 rounded-pill border border-danger/40 bg-danger-soft px-2 py-0.5 text-[11px] font-semibold text-danger">
+      Máx.: {marca.carga ?? "—"}kg x {marca.repeticoes ?? "—"} reps
+    </span>
+  );
+}
+
 export function ExecucaoClient({
   aulaId,
   aulaExercicio,
@@ -327,18 +336,6 @@ export function ExecucaoClient({
         </div>
       )}
 
-      {ultimaMarca?.carga || ultimaMarca?.repeticoes ? (
-        <div className="rounded-xl bg-primary-soft px-3.5 py-2.5 text-sm font-medium text-primary-dark">
-          Último treino ({aulaExercicio.exercicio.nome}): {ultimaMarca.carga ?? "—"}kg x {ultimaMarca.repeticoes ?? "—"} reps
-        </div>
-      ) : null}
-
-      {parceiro && (ultimaMarcaParceiro?.carga || ultimaMarcaParceiro?.repeticoes) ? (
-        <div className="rounded-xl bg-primary-soft px-3.5 py-2.5 text-sm font-medium text-primary-dark">
-          Último treino ({parceiro.exercicio.nome}): {ultimaMarcaParceiro?.carga ?? "—"}kg x{" "}
-          {ultimaMarcaParceiro?.repeticoes ?? "—"} reps
-        </div>
-      ) : null}
 
       <div className="flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
@@ -432,7 +429,10 @@ export function ExecucaoClient({
             </div>
           </div>
 
-          {parceiro && <p className="text-xs font-semibold text-foreground">{aulaExercicio.exercicio.nome}</p>}
+          <p className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground">
+            {aulaExercicio.exercicio.nome}
+            <MarcaMaxima marca={ultimaMarca} />
+          </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
@@ -457,7 +457,10 @@ export function ExecucaoClient({
 
           {parceiro && (
             <>
-              <p className="text-xs font-semibold text-foreground">{parceiro.exercicio.nome}</p>
+              <p className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground">
+                {parceiro.exercicio.nome}
+                <MarcaMaxima marca={ultimaMarcaParceiro} />
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
