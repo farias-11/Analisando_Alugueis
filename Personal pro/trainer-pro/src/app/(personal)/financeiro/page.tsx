@@ -12,7 +12,7 @@ type PagamentoComAluno = {
   valor: number;
   data_pagamento: string;
   forma_pagamento: string;
-  alunos: { nome: string } | null;
+  alunos: { nome: string; planos: { dia_pagamento: number | null } | null } | null;
 };
 
 export default async function FinanceiroPage({
@@ -30,7 +30,7 @@ export default async function FinanceiroPage({
     // ao banco sequencial só pra montar o filtro da próxima
     const { data: pagamentosData } = await supabase
       .from("pagamentos")
-      .select("*, alunos!inner(nome, personal_id)")
+      .select("*, alunos!inner(nome, personal_id, planos(dia_pagamento))")
       .eq("alunos.personal_id", personal.id)
       .order("data_pagamento", { ascending: false })
       .limit(200);
@@ -95,6 +95,7 @@ export default async function FinanceiroPage({
                 <p className="text-sm font-semibold">{p.alunos?.nome}</p>
                 <p className="text-xs text-muted">
                   {formatDataBR(p.data_pagamento)} · {p.forma_pagamento}
+                  {p.alunos?.planos?.dia_pagamento ? ` · cobra todo dia ${p.alunos.planos.dia_pagamento}` : ""}
                 </p>
               </div>
               <p className="text-sm font-semibold">{formatMoedaBR(p.valor)}</p>
