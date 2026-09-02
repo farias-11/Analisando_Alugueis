@@ -5,6 +5,7 @@ import type { Aluno, StatusCiclo } from "@/lib/types";
 
 export interface AlunoComTreino extends Aluno {
   statusTreino: StatusCiclo | null;
+  planoValor: number | null;
 }
 
 export async function listarAlunos(
@@ -21,13 +22,13 @@ export async function listarAlunos(
 ): Promise<AlunoComTreino[]> {
   const supabase = await createClient();
 
-  let query = supabase.from("alunos").select("*").eq("personal_id", personalId);
+  let query = supabase.from("alunos").select("*, planos(valor)").eq("personal_id", personalId);
   if (filtros?.q) query = query.ilike("nome", `%${filtros.q}%`);
   if (filtros?.pagamento) query = query.eq("pagamento_status", filtros.pagamento);
   if (filtros?.status) query = query.eq("status", filtros.status);
 
   const { data: alunos } = await query.order("nome", { ascending: true });
-  const lista = (alunos as Aluno[]) ?? [];
+  const lista = (alunos as unknown as (Aluno & { planos: { valor: number } | null })[]) ?? [];
 
   const { data: ciclos } = await supabase
     .from("ciclos")
@@ -39,7 +40,8 @@ export async function listarAlunos(
 
   let comTreino: AlunoComTreino[] = lista.map((a) => {
     const dataFim = fimPorAluno.get(a.id);
-    return { ...a, statusTreino: dataFim ? statusCiclo(dataFim) : null };
+    const { planos, ...aluno } = a;
+    return { ...aluno, statusTreino: dataFim ? statusCiclo(dataFim) : null, planoValor: planos?.valor ?? null };
   });
 
   if (filtros?.treino) {

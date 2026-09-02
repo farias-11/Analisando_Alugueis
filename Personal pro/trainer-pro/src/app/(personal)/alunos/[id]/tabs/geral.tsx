@@ -30,6 +30,7 @@ export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personal
   const ciclo = await getCicloAtivo(aluno.id);
   const timeline = await getTimelineAluno(aluno.id);
   const planos = await getPlanos(aluno.personal_id);
+  const planoValor = planos.find((p) => p.id === aluno.plano_id)?.valor ?? null;
 
   const diasSemAtualizar = diasDesde(aluno.ultima_atualizacao_medidas);
 
@@ -155,7 +156,7 @@ export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personal
       <Card>
         <div className="mb-2 flex items-center justify-between">
           <CardTitle>Pagamento</CardTitle>
-          <Badge status={statusPagamentoExibicao(aluno)} />
+          <Badge status={statusPagamentoExibicao({ ...aluno, planoValor })} />
         </div>
         <p className="text-sm text-muted">
           {formatMoedaBR(aluno.pagamento_valor)} · vencimento {formatDataBR(aluno.pagamento_vencimento)}

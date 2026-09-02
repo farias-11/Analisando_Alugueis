@@ -109,15 +109,20 @@ export default async function FinanceiroPage({
 
   // convite pendente não conta como aluno ativo pra cobrança — ele ainda nem
   // acessou o app, não faz sentido aparecer devendo mensalidade
-  const { data: alunos } = await supabase
+  const { data: alunosData } = await supabase
     .from("alunos")
-    .select("*")
+    .select("*, planos(valor)")
     .eq("personal_id", personal.id)
     .eq("status", "ativo")
     .eq("status_convite", "aceito")
     .order("pagamento_status", { ascending: false });
 
-  const totalReceber = (alunos ?? [])
+  const alunos = (alunosData ?? []).map((a) => {
+    const { planos, ...aluno } = a as typeof a & { planos: { valor: number } | null };
+    return { ...aluno, planoValor: planos?.valor ?? null };
+  });
+
+  const totalReceber = alunos
     .filter((a) => a.pagamento_status === "atrasado")
     .reduce((s, a) => s + Number(a.pagamento_valor ?? 0), 0);
 
@@ -131,7 +136,7 @@ export default async function FinanceiroPage({
         <p className="text-2xl font-bold text-danger">{formatMoedaBR(totalReceber)}</p>
       </Card>
 
-      <FinanceiroListaSelecionavel alunos={alunos ?? []} />
+      <FinanceiroListaSelecionavel alunos={alunos} />
     </div>
   );
 }

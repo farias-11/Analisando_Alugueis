@@ -48,15 +48,20 @@ export const STATUS_BADGE: Record<
   pendente: { label: "Convite pendente", text: "text-warning", bg: "bg-warning-soft" },
   aceito: { label: "Ativo", text: "text-success", bg: "bg-success-soft" },
   sem_registro: { label: "Sem pagamento", text: "text-muted", bg: "bg-neutral-soft" },
+  free: { label: "Free", text: "text-primary-dark", bg: "bg-primary-soft" },
 };
 
 /** Um aluno recém-criado nasce com pagamento_status='em_dia' por padrão do banco,
  * mas isso não significa que ele já pagou algo — sem vencimento registrado, mostra
- * um estado neutro em vez de "Em dia" (que sugeriria pagamento em dia à toa). */
+ * um estado neutro em vez de "Em dia" (que sugeriria pagamento em dia à toa).
+ * Quem está no plano gratuito (valor 0) nunca terá vencimento mesmo — mostra
+ * "Free" em vez de "Sem pagamento", que soaria como pendência. */
 export function statusPagamentoExibicao(aluno: {
   pagamento_status: string;
   pagamento_vencimento: string | null;
+  planoValor?: number | null;
 }): string {
+  if (aluno.planoValor === 0) return "free";
   if (!aluno.pagamento_vencimento) return "sem_registro";
   return aluno.pagamento_status;
 }

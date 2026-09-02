@@ -13,7 +13,11 @@ import type { Aluno } from "@/lib/types";
 /** Mesma ideia de AlunosListaSelecionavel, adaptada pro Financeiro: seleção
  * múltipla + barra de ação em lote pra "marcar como pago" rápido, sem perder
  * o fluxo individual (com valor/forma ajustáveis) que já existia por aluno. */
-export function FinanceiroListaSelecionavel({ alunos }: { alunos: Aluno[] }) {
+export function FinanceiroListaSelecionavel({
+  alunos,
+}: {
+  alunos: (Aluno & { planoValor: number | null })[];
+}) {
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
   const [pending, startTransition] = useTransition();
 
