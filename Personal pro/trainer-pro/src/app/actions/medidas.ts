@@ -4,11 +4,11 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAluno } from "@/lib/data/current-user";
 import { revalidatePath } from "next/cache";
+import { parseDecimalBR } from "@/lib/utils";
 
 export type SalvarMedidasState = { error?: string; ok?: boolean } | undefined;
 
-const numOrNull = (v: FormDataEntryValue | null) =>
-  v && String(v).trim() !== "" ? Number(v) : null;
+const numOrNull = parseDecimalBR;
 
 export async function salvarMedidas(
   _prevState: SalvarMedidasState,

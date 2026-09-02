@@ -7,7 +7,7 @@ import { registrarSerie, registrarTodasAsSeries } from "@/app/actions/execucoes"
 import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
 import { youtubeEmbedUrl } from "@/lib/youtube";
-import { cn } from "@/lib/utils";
+import { cn, parseDecimalBR } from "@/lib/utils";
 import { CheckCircle2, ChevronRight, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
@@ -206,9 +206,9 @@ export function ExecucaoClient({
   const primeiraMidiaUpload = aulaExercicio.exercicio.midias?.[0];
 
   function salvarSerie() {
-    const cargaNum = carga ? Number(carga) : null;
+    const cargaNum = parseDecimalBR(carga);
     const repsNum = reps ? Number(reps) : null;
-    const cargaNumParceiro = parceiro ? (cargaParceiro ? Number(cargaParceiro) : null) : null;
+    const cargaNumParceiro = parceiro ? parseDecimalBR(cargaParceiro) : null;
     const repsNumParceiro = parceiro ? (repsParceiro ? Number(repsParceiro) : null) : null;
     const serieSalva = serieAtual;
     const { ehAquecimento, serieLocal } = faseDaSerie(serieSalva);
@@ -276,9 +276,9 @@ export function ExecucaoClient({
   }
 
   function finalizarTodas() {
-    const cargaNum = carga ? Number(carga) : null;
+    const cargaNum = parseDecimalBR(carga);
     const repsNum = reps ? Number(reps) : null;
-    const cargaNumParceiro = parceiro ? (cargaParceiro ? Number(cargaParceiro) : null) : null;
+    const cargaNumParceiro = parceiro ? parseDecimalBR(cargaParceiro) : null;
     const repsNumParceiro = parceiro ? (repsParceiro ? Number(repsParceiro) : null) : null;
     startTransition(async () => {
       try {
@@ -517,8 +517,8 @@ export function ExecucaoClient({
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted">Carga (kg)</label>
               <input
-                type="number"
-                step="0.5"
+                type="text"
+                inputMode="decimal"
                 value={carga}
                 onChange={(e) => setCarga(e.target.value)}
                 className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
@@ -545,8 +545,8 @@ export function ExecucaoClient({
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-muted">Carga (kg)</label>
                   <input
-                    type="number"
-                    step="0.5"
+                    type="text"
+                    inputMode="decimal"
                     value={cargaParceiro}
                     onChange={(e) => setCargaParceiro(e.target.value)}
                     className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"

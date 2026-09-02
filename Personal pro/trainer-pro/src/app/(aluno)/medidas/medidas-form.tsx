@@ -22,22 +22,22 @@ export function MedidasForm() {
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Peso (kg)">
-          <Input type="number" step="0.1" name="peso" />
+          <Input type="text" inputMode="decimal" name="peso" placeholder="0,0" />
         </Field>
         <Field label="% de gordura">
-          <Input type="number" step="0.1" name="percentual_gordura" />
+          <Input type="text" inputMode="decimal" name="percentual_gordura" placeholder="0,0" />
         </Field>
       </div>
       <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted">
         Circunferências (cm)
       </p>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="Peito"><Input type="number" step="0.1" name="peito" /></Field>
-        <Field label="Cintura"><Input type="number" step="0.1" name="cintura" /></Field>
-        <Field label="Quadril"><Input type="number" step="0.1" name="quadril" /></Field>
-        <Field label="Braço"><Input type="number" step="0.1" name="braco" /></Field>
-        <Field label="Coxa direita"><Input type="number" step="0.1" name="coxa_direita" /></Field>
-        <Field label="Coxa esquerda"><Input type="number" step="0.1" name="coxa_esquerda" /></Field>
+        <Field label="Peito"><Input type="text" inputMode="decimal" name="peito" placeholder="0,0" /></Field>
+        <Field label="Cintura"><Input type="text" inputMode="decimal" name="cintura" placeholder="0,0" /></Field>
+        <Field label="Quadril"><Input type="text" inputMode="decimal" name="quadril" placeholder="0,0" /></Field>
+        <Field label="Braço"><Input type="text" inputMode="decimal" name="braco" placeholder="0,0" /></Field>
+        <Field label="Coxa direita"><Input type="text" inputMode="decimal" name="coxa_direita" placeholder="0,0" /></Field>
+        <Field label="Coxa esquerda"><Input type="text" inputMode="decimal" name="coxa_esquerda" placeholder="0,0" /></Field>
       </div>
 
       <Field
