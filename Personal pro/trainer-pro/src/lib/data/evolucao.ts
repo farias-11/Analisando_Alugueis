@@ -49,7 +49,7 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
         .gte("data", sessentaDiasAtras)
         .lt("data", trintaDiasAtras)
         .not("carga", "is", null),
-      supabase.from("ciclos").select("id, data_inicio").eq("aluno_id", alunoId).eq("ativo", true).maybeSingle(),
+      supabase.from("ciclos").select("id").eq("aluno_id", alunoId).eq("ativo", true).maybeSingle(),
       supabase
         .from("execucoes")
         .select("data")
@@ -81,34 +81,43 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
   const cargaTendencia: Tendencia =
     cargaDeltaPct === null ? "neutra" : cargaDeltaPct > 2 ? "positiva" : cargaDeltaPct < -2 ? "negativa" : "neutra";
 
-  // Aderência: sessões de treino (aula x dia) numa janela vs. meta (aulas do
-  // ciclo x semanas NA JANELA). A janela é os últimos 30 dias, OU desde o
-  // início do ciclo se ele for mais recente que isso — senão quem começou o
-  // ciclo há 3 dias e já fez tudo que devia até agora aparece com aderência
-  // baixíssima só por dividir pelo mês inteiro em vez do tempo que já passou.
+  // Aderência: sessões de treino (aula x dia, de QUALQUER ciclo — não só o
+  // ativo) numa janela vs. meta (aulas do ciclo ATUAL x semanas na janela).
+  // A janela é os últimos 30 dias, OU desde a primeira execução já registrada
+  // (de qualquer ciclo) se isso for mais recente — senão quem treina há 3
+  // dias aparece com aderência baixíssima só por dividir pelo mês inteiro.
+  //
+  // De propósito NÃO usa ciclo.data_inicio pra isso (era a versão anterior
+  // desse código): renovar o ciclo cria aula_exercicios novos com
+  // data_inicio = hoje, e um aluno que treinou ontem só não teria NENHUMA
+  // sessão dentro da janela — aderência cairia pra 0% a cada renovação,
+  // mesmo pra quem nunca treinou menos. A meta ainda usa o ciclo atual (é o
+  // plano vigente), mas as sessões contam independente de qual ciclo/aula
+  // exata elas pertencem — é a mesma sessão de treino, só mudou o registro.
   let aderenciaPct = 0;
   if (ciclo) {
     const trintaDiasAtrasData = new Date(Date.now() - 30 * 86_400_000);
-    const inicioCicloData = new Date(ciclo.data_inicio + "T00:00:00");
-    const inicioJanela = inicioCicloData > trintaDiasAtrasData ? inicioCicloData : trintaDiasAtrasData;
+
+    const [{ data: aulas }, { data: primeiraExecucao }] = await Promise.all([
+      supabase.from("aulas").select("id").eq("ciclo_id", ciclo.id),
+      supabase.from("execucoes").select("data").eq("aluno_id", alunoId).order("data", { ascending: true }).limit(1).maybeSingle(),
+    ]);
+
+    const primeiraExecucaoData = primeiraExecucao ? new Date(primeiraExecucao.data) : null;
+    const inicioJanela =
+      primeiraExecucaoData && primeiraExecucaoData > trintaDiasAtrasData ? primeiraExecucaoData : trintaDiasAtrasData;
     const diasNaJanela = Math.max(1, Math.round((Date.now() - inicioJanela.getTime()) / 86_400_000));
 
-    const [{ data: aulas }, { data: execs }] = await Promise.all([
-      supabase.from("aulas").select("id").eq("ciclo_id", ciclo.id),
-      supabase
-        .from("execucoes")
-        .select("data, aula_exercicios(aula_id)")
-        .eq("aluno_id", alunoId)
-        .gte("data", inicioJanela.toISOString()),
-    ]);
-    const aulaIds = new Set((aulas ?? []).map((a) => a.id));
-    const metaSessoes = Math.max((aulas?.length ?? 0) * (diasNaJanela / 7), 1);
+    const { data: execs } = await supabase
+      .from("execucoes")
+      .select("data, aula_exercicios(aula_id)")
+      .eq("aluno_id", alunoId)
+      .gte("data", inicioJanela.toISOString());
 
-    // só conta sessão de aula que pertence a ESTE ciclo — sessão de um ciclo
-    // anterior (aula_id diferente) não deveria contar pra meta do atual
+    const metaSessoes = Math.max((aulas?.length ?? 0) * (diasNaJanela / 7), 1);
     const sessoesFeitas = new Set(
       ((execs ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[])
-        .filter((e) => e.aula_exercicios?.aula_id && aulaIds.has(e.aula_exercicios.aula_id))
+        .filter((e) => e.aula_exercicios?.aula_id)
         .map((e) => `${e.aula_exercicios!.aula_id}_${e.data.slice(0, 10)}`)
     );
 

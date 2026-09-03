@@ -30,8 +30,11 @@ export default async function TreinoDoDiaPage() {
 
   const aulas = await getAulasDoCiclo(ciclo.id);
   const supabase = await createClient();
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  // janela de 7 dias (não só "hoje") — mesmo critério do "Meta semanal" da
+  // Home (getAderenciaSemana): treino feito terça continua marcado até a
+  // semana virar, não só no dia em que foi feito
+  const seteDiasAtras = new Date();
+  seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
 
   // aulaDoDia (própria query interna) e os exercícios de cada aula não
   // dependem um do outro — rodam em paralelo. Exercícios de todas as aulas
@@ -51,23 +54,23 @@ export default async function TreinoDoDiaPage() {
   }
   const exerciciosPorAula = aulas.map((aula) => exerciciosPorAulaId.get(aula.id) ?? []);
 
-  // uma única query pras execuções de hoje de TODAS as aulas, em vez de uma
+  // uma única query pras execuções da semana de TODAS as aulas, em vez de uma
   // query de contagem por aula (evita N idas ao banco em série/paralelo)
   const todosAulaExercicioIds = exerciciosPorAula.flat().map((e) => e.id);
-  const { data: execucoesHoje } = todosAulaExercicioIds.length
+  const { data: execucoesSemana } = todosAulaExercicioIds.length
     ? await supabase
         .from("execucoes")
         .select("aula_exercicio_id")
         .eq("aluno_id", aluno.id)
         .in("aula_exercicio_id", todosAulaExercicioIds)
-        .gte("data", hojeInicio.toISOString())
+        .gte("data", seteDiasAtras.toISOString())
     : { data: [] as { aula_exercicio_id: string }[] };
-  const aulaExercicioIdsFeitosHoje = new Set((execucoesHoje ?? []).map((e) => e.aula_exercicio_id));
+  const aulaExercicioIdsFeitosNaSemana = new Set((execucoesSemana ?? []).map((e) => e.aula_exercicio_id));
 
   const aulasComStatus = aulas.map((aula, i) => {
     const exercicios = exerciciosPorAula[i];
-    const concluidaHoje = exercicios.some((e) => aulaExercicioIdsFeitosHoje.has(e.id));
-    return { aula, totalExercicios: exercicios.length, concluidaHoje };
+    const concluidaNaSemana = exercicios.some((e) => aulaExercicioIdsFeitosNaSemana.has(e.id));
+    return { aula, totalExercicios: exercicios.length, concluidaNaSemana };
   });
 
   return (
@@ -85,7 +88,7 @@ export default async function TreinoDoDiaPage() {
           </Card>
         )}
 
-        {aulasComStatus.map(({ aula, totalExercicios, concluidaHoje }) => {
+        {aulasComStatus.map(({ aula, totalExercicios, concluidaNaSemana }) => {
           const destaque = aulaHoje?.id === aula.id;
           return (
             <Link key={aula.id} href={`/treino/${aula.id}`}>
@@ -111,7 +114,7 @@ export default async function TreinoDoDiaPage() {
                     </CardSubtitle>
                   </div>
                   <div className="flex items-center gap-2">
-                    {concluidaHoje ? (
+                    {concluidaNaSemana ? (
                       <CheckCircle2 className="text-success" size={20} />
                     ) : (
                       <Circle className="text-muted-2" size={20} />
