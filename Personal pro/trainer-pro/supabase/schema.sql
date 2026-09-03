@@ -86,6 +86,7 @@ create table alunos (
   notificacoes_preferencias jsonb not null default '{}'::jsonb,
   convite_enviado_em timestamptz not null default now(), -- reenviar convite atualiza este campo
   fotos_solicitadas jsonb not null default '[]'::jsonb, -- ângulos de foto que o personal pediu (ex: ["Frente","Lado","Costas"])
+  medidas_solicitadas jsonb not null default '[]'::jsonb, -- campos de medida além do peso (sempre pedido) que o personal quer acompanhar
 
   created_at timestamptz not null default now()
 );

@@ -10,10 +10,25 @@ import { Camera, Check } from "lucide-react";
 // deixa folga pro overhead do multipart/form-data.
 const TAMANHO_MAXIMO_BYTES = 14 * 1024 * 1024;
 
-export function MedidasForm() {
+const LABEL_CIRCUNFERENCIA: Record<string, string> = {
+  peito: "Peito",
+  cintura: "Cintura",
+  quadril: "Quadril",
+  braco: "Braço",
+  coxa_direita: "Coxa direita",
+  coxa_esquerda: "Coxa esquerda",
+};
+const CIRCUNFERENCIAS = Object.keys(LABEL_CIRCUNFERENCIA);
+
+/** Peso é sempre pedido; o resto (% gordura, circunferências) só aparece se
+ * o personal marcou como solicitado pra esse aluno — tem quem só quer se
+ * pesar, não faz sentido empurrar 6 campos de fita métrica pra essa pessoa. */
+export function MedidasForm({ medidasSolicitadas }: { medidasSolicitadas: string[] }) {
   const [state, formAction, pending] = useActionState(salvarMedidas, undefined);
   const [nomeFoto, setNomeFoto] = useState<string | null>(null);
   const [erroTamanho, setErroTamanho] = useState<string | null>(null);
+  const pedeGordura = medidasSolicitadas.includes("percentual_gordura");
+  const circunferenciasPedidas = CIRCUNFERENCIAS.filter((c) => medidasSolicitadas.includes(c));
 
   return (
     <form action={formAction} className="space-y-3">
@@ -24,21 +39,26 @@ export function MedidasForm() {
         <Field label="Peso (kg)">
           <Input type="text" inputMode="decimal" name="peso" placeholder="0,0" />
         </Field>
-        <Field label="% de gordura">
-          <Input type="text" inputMode="decimal" name="percentual_gordura" placeholder="0,0" />
-        </Field>
+        {pedeGordura && (
+          <Field label="% de gordura">
+            <Input type="text" inputMode="decimal" name="percentual_gordura" placeholder="0,0" />
+          </Field>
+        )}
       </div>
-      <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted">
-        Circunferências (cm)
-      </p>
-      <div className="grid grid-cols-2 gap-3">
-        <Field label="Peito"><Input type="text" inputMode="decimal" name="peito" placeholder="0,0" /></Field>
-        <Field label="Cintura"><Input type="text" inputMode="decimal" name="cintura" placeholder="0,0" /></Field>
-        <Field label="Quadril"><Input type="text" inputMode="decimal" name="quadril" placeholder="0,0" /></Field>
-        <Field label="Braço"><Input type="text" inputMode="decimal" name="braco" placeholder="0,0" /></Field>
-        <Field label="Coxa direita"><Input type="text" inputMode="decimal" name="coxa_direita" placeholder="0,0" /></Field>
-        <Field label="Coxa esquerda"><Input type="text" inputMode="decimal" name="coxa_esquerda" placeholder="0,0" /></Field>
-      </div>
+      {circunferenciasPedidas.length > 0 && (
+        <>
+          <p className="pt-1 text-xs font-medium uppercase tracking-wide text-muted">
+            Circunferências (cm)
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            {circunferenciasPedidas.map((campo) => (
+              <Field key={campo} label={LABEL_CIRCUNFERENCIA[campo]}>
+                <Input type="text" inputMode="decimal" name={campo} placeholder="0,0" />
+              </Field>
+            ))}
+          </div>
+        </>
+      )}
 
       <Field
         label="Foto de progresso (opcional)"

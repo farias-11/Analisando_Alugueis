@@ -175,13 +175,25 @@ export async function pedirAtualizacao(formData: FormData) {
   const supabase = await createClient();
   const alunoId = String(formData.get("alunoId") || "");
 
-  const { data: aluno } = await supabase.from("alunos").select("nome").eq("id", alunoId).maybeSingle();
+  const { data: aluno } = await supabase
+    .from("alunos")
+    .select("nome, medidas_solicitadas, fotos_solicitadas")
+    .eq("id", alunoId)
+    .maybeSingle();
   if (!aluno) return;
+
+  // mensagem reflete só o que foi de fato pedido pra esse aluno — quem só
+  // se pesa não recebe um aviso genérico de "medidas e fotos"
+  const partes = ["peso"];
+  if ((aluno.medidas_solicitadas as string[]).length > 0) partes.push("medidas");
+  if ((aluno.fotos_solicitadas as string[]).length > 0) partes.push("fotos");
+  const listaCampos =
+    partes.length === 1 ? partes[0] : `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}`;
 
   await notificarAluno(alunoId, {
     tipo: "pedido_atualizacao",
     titulo: "Hora de atualizar seus dados",
-    mensagem: "Seu personal pediu que você atualize peso, medidas e fotos.",
+    mensagem: `Seu personal pediu que você atualize ${listaCampos}.`,
     link: "/medidas",
   });
 
@@ -227,6 +239,22 @@ export async function atualizarFotosSolicitadas(formData: FormData) {
   await supabase
     .from("alunos")
     .update({ fotos_solicitadas: selecionados })
+    .eq("id", alunoId)
+    .eq("personal_id", personal.id);
+
+  revalidatePath(`/alunos/${alunoId}`);
+}
+
+export async function atualizarMedidasSolicitadas(formData: FormData) {
+  const { personal } = await requirePersonal();
+  const supabase = await createClient();
+  const alunoId = String(formData.get("alunoId") || "");
+
+  const selecionados = formData.getAll("campos").map(String);
+
+  await supabase
+    .from("alunos")
+    .update({ medidas_solicitadas: selecionados })
     .eq("id", alunoId)
     .eq("personal_id", personal.id);
 

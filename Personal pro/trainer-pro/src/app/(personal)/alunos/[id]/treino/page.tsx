@@ -19,6 +19,7 @@ import {
   moverAula,
   atualizarDiasSemanaAula,
 } from "@/app/actions/treinos";
+import { aplicarTemplateAoAluno } from "@/app/actions/templates";
 import { RenovarCicloModal } from "@/components/renovar-ciclo-modal";
 import { Badge } from "@/components/ui/badge";
 import { DiasSemanaPicker } from "@/components/dias-semana-picker";
@@ -42,13 +43,15 @@ export default async function EditorTreinoPage({
     .maybeSingle();
   if (!aluno) notFound();
 
-  const [ciclo, exercicios, contexto, outrosAlunos, ciclosAtivos] = await Promise.all([
+  const [ciclo, exercicios, contexto, outrosAlunos, ciclosAtivos, templates] = await Promise.all([
     getCicloAtivo(alunoId),
     supabase.from("exercicios").select("*").eq("personal_id", personal.id).order("nome"),
     getContextoAluno(alunoId),
     supabase.from("alunos").select("id, nome").eq("personal_id", personal.id).neq("id", alunoId).order("nome"),
     supabase.from("ciclos").select("aluno_id").eq("ativo", true),
+    supabase.from("templates").select("id, nome").eq("personal_id", personal.id).order("nome"),
   ]);
+  const listaTemplates = templates.data ?? [];
   const alunoIdsComCiclo = new Set((ciclosAtivos.data ?? []).map((c) => c.aluno_id));
   const alunosParaDuplicar = (outrosAlunos.data ?? []).filter((a) => alunoIdsComCiclo.has(a.id));
 
@@ -78,6 +81,31 @@ export default async function EditorTreinoPage({
                 <input type="hidden" name="alunoId" value={alunoId} />
                 <Button type="submit">Criar ciclo de treino</Button>
               </form>
+              {listaTemplates.length > 0 && (
+                <details className="mb-3">
+                  <summary className="cursor-pointer text-sm font-medium text-primary">
+                    ou aplicar um template pronto
+                  </summary>
+                  <form action={aplicarTemplateAoAluno} className="mt-2 flex gap-2">
+                    <input type="hidden" name="alunoId" value={alunoId} />
+                    <select
+                      name="templateId"
+                      required
+                      className="h-9 flex-1 rounded-lg border border-border px-2 text-sm"
+                    >
+                      <option value="">Selecione o template</option>
+                      {listaTemplates.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.nome}
+                        </option>
+                      ))}
+                    </select>
+                    <Button type="submit" size="sm" variant="outline">
+                      Aplicar
+                    </Button>
+                  </form>
+                </details>
+              )}
               {alunosParaDuplicar.length > 0 && (
                 <details>
                   <summary className="cursor-pointer text-sm font-medium text-primary">
@@ -151,6 +179,34 @@ export default async function EditorTreinoPage({
                   </Button>
                 </form>
               </Card>
+
+              {listaTemplates.length > 0 && (
+                <Card>
+                  <details>
+                    <summary className="cursor-pointer text-sm font-medium text-primary">
+                      Aplicar um template pronto (substitui o treino atual)
+                    </summary>
+                    <form action={aplicarTemplateAoAluno} className="mt-2 flex gap-2">
+                      <input type="hidden" name="alunoId" value={alunoId} />
+                      <select
+                        name="templateId"
+                        required
+                        className="h-9 flex-1 rounded-lg border border-border px-2 text-sm"
+                      >
+                        <option value="">Selecione o template</option>
+                        {listaTemplates.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome}
+                          </option>
+                        ))}
+                      </select>
+                      <Button type="submit" size="sm" variant="outline">
+                        Aplicar
+                      </Button>
+                    </form>
+                  </details>
+                </Card>
+              )}
 
               {aulasComExercicios.map(({ aula, exercicios: exs }, aulaIndex) => (
                 <Card key={aula.id}>

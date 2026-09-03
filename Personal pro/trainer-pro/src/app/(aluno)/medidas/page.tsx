@@ -63,7 +63,7 @@ export default async function MinhasMedidasPage() {
         )}
 
         <Card>
-          <MedidasForm />
+          <MedidasForm medidasSolicitadas={aluno.medidas_solicitadas} />
         </Card>
 
         <div>

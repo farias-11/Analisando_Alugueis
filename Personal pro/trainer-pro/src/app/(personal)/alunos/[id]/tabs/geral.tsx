@@ -6,6 +6,8 @@ import { TimelineAluno } from "@/components/timeline-aluno";
 import { PlanoDoAlunoSelect } from "@/components/plano-do-aluno-select";
 import { Card, CardSubtitle, CardTitle } from "@/components/ui/card";
 import { EvolutionSummary } from "@/components/evolution-summary";
+import { InsightEvolucaoCard } from "@/components/insight-evolucao-card";
+import { gerarInsightEvolucao } from "@/lib/insight-evolucao";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -22,15 +24,19 @@ import { AlertTriangle, Bell, FileText, Phone, RefreshCw, XCircle, PauseCircle, 
 import { buildWhatsappLink, mensagemCobranca } from "@/lib/whatsapp";
 import { EditarConfiguracoesForm } from "./editar-configuracoes-form";
 import { FotosSolicitadasForm } from "@/components/fotos-solicitadas-form";
+import { MedidasSolicitadasForm } from "@/components/medidas-solicitadas-form";
 import { ConviteWhatsappButton } from "@/components/convite-whatsapp-button";
 import type { Aluno } from "@/lib/types";
 
 export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personalNome: string }) {
-  const resumo = await getResumoEvolucao(aluno.id);
-  const ciclo = await getCicloAtivo(aluno.id);
-  const timeline = await getTimelineAluno(aluno.id);
-  const planos = await getPlanos(aluno.personal_id);
+  const [resumo, ciclo, timeline, planos] = await Promise.all([
+    getResumoEvolucao(aluno.id),
+    getCicloAtivo(aluno.id),
+    getTimelineAluno(aluno.id),
+    getPlanos(aluno.personal_id),
+  ]);
   const planoValor = planos.find((p) => p.id === aluno.plano_id)?.valor ?? null;
+  const insight = gerarInsightEvolucao(resumo, { pessoa: "ele" });
 
   const diasSemAtualizar = diasDesde(aluno.ultima_atualizacao_medidas);
 
@@ -85,6 +91,7 @@ export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personal
           )}
         </div>
         <EvolutionSummary resumo={resumo} />
+        <InsightEvolucaoCard insight={insight} />
         <div className="mt-3 flex flex-wrap gap-2">
           <form action={pedirAtualizacao}>
             <input type="hidden" name="alunoId" value={aluno.id} />
@@ -257,6 +264,14 @@ export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personal
           bioimpedanciaFrequenciaInicial={aluno.bioimpedancia_frequencia_dias}
           duracaoCicloInicial={aluno.ciclo_duracao_padrao_semanas}
         />
+      </Card>
+
+      <Card>
+        <CardTitle className="mb-1">Medidas pedidas</CardTitle>
+        <p className="mb-3 text-sm text-muted">
+          Peso é sempre pedido. O resto é opcional — tem aluno que só quer se pesar.
+        </p>
+        <MedidasSolicitadasForm alunoId={aluno.id} atuais={aluno.medidas_solicitadas} />
       </Card>
 
       <Card>

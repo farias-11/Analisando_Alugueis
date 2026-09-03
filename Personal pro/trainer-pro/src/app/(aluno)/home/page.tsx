@@ -12,6 +12,8 @@ import { diasDesde } from "@/lib/status";
 import { Card, CardSubtitle, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { EvolutionSummary } from "@/components/evolution-summary";
+import { InsightEvolucaoCard } from "@/components/insight-evolucao-card";
+import { gerarInsightEvolucao } from "@/lib/insight-evolucao";
 import { InstallPromptBanner } from "@/components/install-prompt-banner";
 import { AlertTriangle, CheckCircle2, ChevronRight, Flame } from "lucide-react";
 import Link from "next/link";
@@ -48,6 +50,7 @@ export default async function HomePage() {
 
   const primeiroNome = aluno.nome.split(" ")[0];
   const metaPct = meta > 0 ? Math.round((concluidas / meta) * 100) : 0;
+  const insight = gerarInsightEvolucao(resumo, { pessoa: "voce", semana: { concluidas, meta } });
 
   return (
     <div className="space-y-5 px-4 pb-4 pt-6">
@@ -146,6 +149,7 @@ export default async function HomePage() {
       <Card>
         <CardTitle className="mb-3">Seu progresso</CardTitle>
         <EvolutionSummary resumo={resumo} />
+        <InsightEvolucaoCard insight={insight} />
       </Card>
     </div>
   );

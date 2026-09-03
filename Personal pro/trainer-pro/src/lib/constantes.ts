@@ -17,3 +17,15 @@ export const TIPOS_NOTIFICACAO_ALUNO = [
 ] as const;
 
 export const ANGULOS_FOTO_DISPONIVEIS = ["Frente", "Lado direito", "Lado esquerdo", "Costas"] as const;
+
+// Peso é sempre pedido (não entra nessa lista) — o resto é opt-in por aluno,
+// alguns só querem se pesar e mais nada.
+export const CAMPOS_MEDIDA_DISPONIVEIS = [
+  { campo: "percentual_gordura", label: "% de gordura" },
+  { campo: "peito", label: "Peito" },
+  { campo: "cintura", label: "Cintura" },
+  { campo: "quadril", label: "Quadril" },
+  { campo: "braco", label: "Braço" },
+  { campo: "coxa_direita", label: "Coxa direita" },
+  { campo: "coxa_esquerda", label: "Coxa esquerda" },
+] as const;

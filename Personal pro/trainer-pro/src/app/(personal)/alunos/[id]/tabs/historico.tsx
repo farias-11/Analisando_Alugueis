@@ -1,4 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
+import { getResumoEvolucao } from "@/lib/data/evolucao";
+import { gerarInsightEvolucao } from "@/lib/insight-evolucao";
+import { InsightEvolucaoCard } from "@/components/insight-evolucao-card";
 import { Card, CardTitle } from "@/components/ui/card";
 import { formatDataBR } from "@/lib/status";
 import { TrendingDown, TrendingUp } from "lucide-react";
@@ -47,18 +50,17 @@ interface Sessao {
 
 export async function HistoricoTab({ alunoId }: { alunoId: string }) {
   const supabase = await createClient();
-  const { data: ciclos } = await supabase
-    .from("ciclos")
-    .select("*")
-    .eq("aluno_id", alunoId)
-    .order("data_inicio", { ascending: false });
-
-  const { data: execucoes } = await supabase
-    .from("execucoes")
-    .select("data, carga, repeticoes, serie_numero, aula_exercicios(aula_id, aulas(nome), exercicios(nome))")
-    .eq("aluno_id", alunoId)
-    .order("data", { ascending: false })
-    .limit(300);
+  const [{ data: ciclos }, { data: execucoes }, resumo] = await Promise.all([
+    supabase.from("ciclos").select("*").eq("aluno_id", alunoId).order("data_inicio", { ascending: false }),
+    supabase
+      .from("execucoes")
+      .select("data, carga, repeticoes, serie_numero, aula_exercicios(aula_id, aulas(nome), exercicios(nome))")
+      .eq("aluno_id", alunoId)
+      .order("data", { ascending: false })
+      .limit(300),
+    getResumoEvolucao(alunoId),
+  ]);
+  const insight = gerarInsightEvolucao(resumo, { pessoa: "ele" });
 
   const linhas = (execucoes ?? []) as unknown as LinhaExecucao[];
 
@@ -117,6 +119,8 @@ export async function HistoricoTab({ alunoId }: { alunoId: string }) {
 
   return (
     <div className="space-y-4">
+      <InsightEvolucaoCard insight={insight} className="" />
+
       <Card>
         <CardTitle className="mb-3">Ciclos de treino</CardTitle>
         <div className="space-y-2">

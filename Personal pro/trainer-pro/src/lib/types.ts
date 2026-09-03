@@ -60,6 +60,7 @@ export interface Aluno {
   notificacoes_preferencias: NotificacoesPreferencias;
   convite_enviado_em: string;
   fotos_solicitadas: string[];
+  medidas_solicitadas: string[];
   created_at: string;
 }
 
