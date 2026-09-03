@@ -60,7 +60,7 @@ export async function HistoricoTab({ alunoId }: { alunoId: string }) {
       .limit(300),
     getResumoEvolucao(alunoId),
   ]);
-  const insight = gerarInsightEvolucao(resumo, { pessoa: "ele" });
+  const insight = gerarInsightEvolucao(resumo);
 
   const linhas = (execucoes ?? []) as unknown as LinhaExecucao[];
 

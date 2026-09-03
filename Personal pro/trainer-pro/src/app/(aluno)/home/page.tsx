@@ -50,7 +50,7 @@ export default async function HomePage() {
 
   const primeiroNome = aluno.nome.split(" ")[0];
   const metaPct = meta > 0 ? Math.round((concluidas / meta) * 100) : 0;
-  const insight = gerarInsightEvolucao(resumo, { pessoa: "voce", semana: { concluidas, meta } });
+  const insight = gerarInsightEvolucao(resumo, { semana: { concluidas, meta } });
 
   return (
     <div className="space-y-5 px-4 pb-4 pt-6">

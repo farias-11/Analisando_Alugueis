@@ -5,57 +5,30 @@ export interface InsightEvolucao {
   frase: string;
 }
 
-/** Frase curta + emoji resumindo o estado geral do aluno, usado tanto na
- * Home do aluno (2ª pessoa) quanto na Ficha/Histórico do personal (3ª
- * pessoa) — mesma lógica de prioridade nos dois lugares, só muda o texto.
+/** Frase BEM curta + emoji — pensada pra um personal bater o olho e entender
+ * na hora, tipo um status. Sem pronome de propósito (funciona igual na Home
+ * do aluno e na Ficha/Histórico do personal, sem precisar de duas versões).
  *
- * De propósito NÃO repete os números que já aparecem nos cards de peso/carga/
- * aderência logo acima (isso só duplicaria a mesma informação) — a frase
- * tenta interpretar o que aqueles números significam, não redizer o valor. */
+ * Aderência JÁ tem card próprio — não vira insight (seria só repetir o
+ * mesmo eixo com outras palavras). O insight cobre o que os cards não
+ * dizem: se bateu a meta da semana, se sumiu, e a leitura da carga. */
 export function gerarInsightEvolucao(
   resumo: ResumoEvolucao,
-  opts: { pessoa: "voce" | "ele"; semana?: { concluidas: number; meta: number } }
+  opts: { semana?: { concluidas: number; meta: number } } = {}
 ): InsightEvolucao {
-  const voce = opts.pessoa === "voce";
   const semana = opts.semana;
 
   if (semana && semana.meta > 0 && semana.concluidas >= semana.meta) {
-    return {
-      emoji: "🏆",
-      frase: voce ? "Você treinou a semana completa! Mandou muito bem." : "Treinou a semana completa.",
-    };
+    return { emoji: "🏆", frase: "Semana completa!" };
   }
   if (resumo.aderenciaPct === 0) {
-    return {
-      emoji: "😴",
-      frase: voce ? "Nenhum treino registrado nos últimos 30 dias — bora voltar?" : "Sem treinos nos últimos 30 dias.",
-    };
+    return { emoji: "😴", frase: "Sumiu — 30 dias sem treinar" };
   }
   if (resumo.cargaTendencia === "positiva") {
-    return {
-      emoji: "🔥",
-      frase: voce ? "Sua carga está subindo — evoluindo direitinho!" : "Carga em alta — evoluindo bem.",
-    };
+    return { emoji: "🔥", frase: "Carga subindo bem" };
   }
   if (resumo.cargaTendencia === "negativa") {
-    return {
-      emoji: "📉",
-      frase: voce
-        ? "Sua carga média caiu ultimamente — pode ser fadiga ou hora de ajustar o treino."
-        : "Carga média em queda — vale conversar sobre carga ou descanso.",
-    };
+    return { emoji: "📉", frase: "Carga em queda" };
   }
-  if (resumo.aderenciaTendencia === "negativa") {
-    return {
-      emoji: "⚠️",
-      frase: voce ? "Você tá treinando menos que o planejado — bora recuperar o ritmo?" : "Treinando menos que o planejado ultimamente.",
-    };
-  }
-  if (resumo.aderenciaTendencia === "positiva") {
-    return {
-      emoji: "💪",
-      frase: voce ? "Aderência ótima nas últimas semanas — continue assim!" : "Aderência ótima nas últimas semanas.",
-    };
-  }
-  return { emoji: "👍", frase: voce ? "Tudo estável por aqui." : "Estado estável." };
+  return { emoji: "👍", frase: "Tudo em dia" };
 }

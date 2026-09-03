@@ -36,7 +36,7 @@ export async function GeralTab({ aluno, personalNome }: { aluno: Aluno; personal
     getPlanos(aluno.personal_id),
   ]);
   const planoValor = planos.find((p) => p.id === aluno.plano_id)?.valor ?? null;
-  const insight = gerarInsightEvolucao(resumo, { pessoa: "ele" });
+  const insight = gerarInsightEvolucao(resumo);
 
   const diasSemAtualizar = diasDesde(aluno.ultima_atualizacao_medidas);
 
