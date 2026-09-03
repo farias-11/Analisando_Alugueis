@@ -185,7 +185,10 @@ export async function getAulaExercicio(id: string) {
   return data;
 }
 
-/** Maior carga e maior repetição já registradas nesse exercício, pra exibir como referência. */
+/** Maior carga e maior repetição já registradas nesse exercício, pra exibir
+ * como referência — uma query só (não duas em série): busca todas as linhas
+ * e calcula os dois máximos em JS, já que é sempre um punhado de execuções
+ * por exercício por aluno. */
 export async function getUltimaMarca(
   alunoId: string,
   aulaExercicioId: string
@@ -195,23 +198,19 @@ export async function getUltimaMarca(
     .from("execucoes")
     .select("carga, repeticoes")
     .eq("aluno_id", alunoId)
-    .eq("aula_exercicio_id", aulaExercicioId)
-    .order("carga", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+    .eq("aula_exercicio_id", aulaExercicioId);
 
-  if (!data) return null;
+  if (!data || data.length === 0) return null;
 
-  const { data: maxRep } = await supabase
-    .from("execucoes")
-    .select("repeticoes")
-    .eq("aluno_id", alunoId)
-    .eq("aula_exercicio_id", aulaExercicioId)
-    .order("repeticoes", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  return { carga: data.carga, repeticoes: maxRep?.repeticoes ?? data.repeticoes };
+  let maiorCarga: number | null = null;
+  let maiorRepeticoes: number | null = null;
+  for (const row of data) {
+    if (row.carga !== null && (maiorCarga === null || row.carga > maiorCarga)) maiorCarga = row.carga;
+    if (row.repeticoes !== null && (maiorRepeticoes === null || row.repeticoes > maiorRepeticoes)) {
+      maiorRepeticoes = row.repeticoes;
+    }
+  }
+  return { carga: maiorCarga, repeticoes: maiorRepeticoes };
 }
 
 /** Séries já registradas hoje para esse exercício — usado pra restaurar o
@@ -240,12 +239,12 @@ export async function getExecucoesDeHoje(
 
 /** Início do treino de hoje pra essa aula (primeira série registrada hoje em
  * qualquer exercício dela) — usado pro cronômetro ao vivo na execução, pra ele
- * continuar contando certo mesmo se o aluno sair e voltar no meio do treino. */
-export async function getInicioTreinoHoje(alunoId: string, aulaId: string): Promise<string | null> {
+ * continuar contando certo mesmo se o aluno sair e voltar no meio do treino.
+ * Recebe os ids de aula_exercicios já calculados pela página (em vez de
+ * buscar de novo aqui) — a página que chama isso já tem essa lista pronta. */
+export async function getInicioTreinoHoje(alunoId: string, aulaExercicioIds: string[]): Promise<string | null> {
+  if (aulaExercicioIds.length === 0) return null;
   const supabase = await createClient();
-  const exercicios = await getExerciciosDaAula(aulaId);
-  const ids = exercicios.map((e) => e.id);
-  if (ids.length === 0) return null;
 
   const hojeInicio = new Date();
   hojeInicio.setHours(0, 0, 0, 0);
@@ -254,7 +253,7 @@ export async function getInicioTreinoHoje(alunoId: string, aulaId: string): Prom
     .from("execucoes")
     .select("data")
     .eq("aluno_id", alunoId)
-    .in("aula_exercicio_id", ids)
+    .in("aula_exercicio_id", aulaExercicioIds)
     .gte("data", hojeInicio.toISOString())
     .order("data", { ascending: true })
     .limit(1)
@@ -278,17 +277,15 @@ export async function getExecucoesRecentes(
   return (data as Execucao[]) ?? [];
 }
 
-export async function getAderenciaSemana(alunoId: string): Promise<{
+/** Recebe as aulas do ciclo ativo já buscadas pelo chamador (evita repetir
+ * a mesma consulta de ciclo+aulas que a página já fez em paralelo). */
+export async function getAderenciaSemana(alunoId: string, aulas: Aula[]): Promise<{
   concluidas: number;
   meta: number;
 }> {
+  if (aulas.length === 0) return { concluidas: 0, meta: 0 };
   const supabase = await createClient();
   const seteDiasAtras = new Date(Date.now() - 7 * 86_400_000).toISOString();
-
-  const ciclo = await getCicloAtivo(alunoId);
-  if (!ciclo) return { concluidas: 0, meta: 0 };
-
-  const aulas = await getAulasDoCiclo(ciclo.id);
 
   const { data } = await supabase
     .from("execucoes")

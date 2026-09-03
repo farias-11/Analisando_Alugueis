@@ -29,12 +29,27 @@ export default async function TreinoDoDiaPage() {
   }
 
   const aulas = await getAulasDoCiclo(ciclo.id);
-  const aulaHoje = await aulaDoDia(aluno.id, aulas);
   const supabase = await createClient();
   const hojeInicio = new Date();
   hojeInicio.setHours(0, 0, 0, 0);
 
-  const exerciciosPorAula = await Promise.all(aulas.map((aula) => getExerciciosDaAula(aula.id)));
+  // aulaDoDia (própria query interna) e os exercícios de cada aula não
+  // dependem um do outro — rodam em paralelo. Exercícios de todas as aulas
+  // numa query só (.in) em vez de uma query por aula.
+  const aulaIds = aulas.map((a) => a.id);
+  const [aulaHoje, { data: exerciciosData }] = await Promise.all([
+    aulaDoDia(aluno.id, aulas),
+    aulaIds.length
+      ? supabase.from("aula_exercicios").select("*, exercicio:exercicios(*)").in("aula_id", aulaIds).order("ordem", { ascending: true })
+      : Promise.resolve({ data: [] as Awaited<ReturnType<typeof getExerciciosDaAula>> }),
+  ]);
+  const exerciciosPorAulaId = new Map<string, typeof exerciciosData>();
+  for (const ex of exerciciosData ?? []) {
+    const lista = exerciciosPorAulaId.get(ex.aula_id) ?? [];
+    lista.push(ex);
+    exerciciosPorAulaId.set(ex.aula_id, lista);
+  }
+  const exerciciosPorAula = aulas.map((aula) => exerciciosPorAulaId.get(aula.id) ?? []);
 
   // uma única query pras execuções de hoje de TODAS as aulas, em vez de uma
   // query de contagem por aula (evita N idas ao banco em série/paralelo)

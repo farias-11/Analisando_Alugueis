@@ -2,7 +2,6 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { statusCiclo, diasDesde, diasRestantes as calcDiasRestantes } from "@/lib/status";
 import { buildWhatsappLink, mensagemCobranca } from "@/lib/whatsapp";
-import { getResumoEvolucao } from "@/lib/data/evolucao";
 
 export type TipoRadar =
   | "pagamento_atrasado"
@@ -26,19 +25,12 @@ export interface CicloVencendoItem {
   diasRestantes: number;
 }
 
-export interface DestaqueEvolucao {
-  alunoId: string;
-  alunoNome: string;
-  cargaDeltaPct: number;
-}
-
 export interface DashboardData {
   fraseAbertura: string;
   radar: ItemRadar[];
   radarTotal: number;
   ciclosVencendoSemana: CicloVencendoItem[];
-  financeiroSemana: { recebidoSemana: number; emAberto: number };
-  destaquesEvolucao: DestaqueEvolucao[];
+  financeiroSemana: { recebidoSemana: number; recebidoTendenciaPct: number | null; emAberto: number };
   resumo: {
     alunosAtivos: number;
     treinosConcluidosHoje: number;
@@ -110,6 +102,7 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
   const hojeInicio = new Date();
   hojeInicio.setHours(0, 0, 0, 0);
   const seteDiasAtras = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
+  const catorzeDiasAtras = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
 
   const [
     { data: ticketsAbertos },
@@ -118,14 +111,13 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
     { data: bioUltimas },
     { data: execHoje },
     { data: pagamentosSemana },
-    aderenciaMedia,
   ] = await Promise.all([
     supabase
       .from("tickets")
       .select("id, aluno_id, created_at")
       .eq("status", "aberto")
       .in("aluno_id", idsOuVazio),
-    supabase.from("ciclos").select("aluno_id, data_fim").eq("ativo", true).in("aluno_id", idsOuVazio),
+    supabase.from("ciclos").select("id, aluno_id, data_fim").eq("ativo", true).in("aluno_id", idsOuVazio),
     comAnamnese.length
       ? supabase.from("anamneses").select("aluno_id, concluida").in("aluno_id", comAnamnese)
       : Promise.resolve({ data: [] as { aluno_id: string; concluida: boolean }[] }),
@@ -146,11 +138,14 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
       .gte("data", hojeInicio.toISOString()),
     supabase
       .from("pagamentos")
-      .select("valor, aluno_id")
+      .select("valor, aluno_id, data_pagamento")
       .in("aluno_id", idsOuVazio)
-      .gte("data_pagamento", seteDiasAtras),
-    calcularAderenciaMedia(alunoIds),
+      .gte("data_pagamento", catorzeDiasAtras),
   ]);
+
+  // reaproveita os ciclos ativos já buscados acima em vez de consultar nível
+  // "ciclos ativos" de novo dentro de calcularAderenciaMedia
+  const aderenciaMedia = await calcularAderenciaMedia(alunoIds, ciclosAtivos ?? []);
 
   const radar: ItemRadar[] = [];
 
@@ -277,21 +272,17 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
       .filter(Boolean)
   ).size;
 
-  const recebidoSemana = (pagamentosSemana ?? []).reduce((s, p) => s + Number(p.valor), 0);
+  const recebidoSemana = (pagamentosSemana ?? [])
+    .filter((p) => p.data_pagamento >= seteDiasAtras)
+    .reduce((s, p) => s + Number(p.valor), 0);
+  const recebidoSemanaAnterior = (pagamentosSemana ?? [])
+    .filter((p) => p.data_pagamento < seteDiasAtras)
+    .reduce((s, p) => s + Number(p.valor), 0);
+  const recebidoTendenciaPct =
+    recebidoSemanaAnterior > 0 ? Math.round(((recebidoSemana - recebidoSemanaAnterior) / recebidoSemanaAnterior) * 100) : null;
   const emAberto = alunosAtivos
     .filter((a) => a.pagamento_status === "atrasado")
     .reduce((s, a) => s + Number(a.pagamento_valor ?? 0), 0);
-
-  // destaques de evolução (2.6): reaproveita o mesmo cálculo de %carga já
-  // usado na Ficha do aluno/Meu progresso, só ranqueia entre todos os ativos
-  const evolucoes = await Promise.all(
-    alunosAtivos.map(async (a) => ({ aluno: a, resumo: await getResumoEvolucao(a.id) }))
-  );
-  const destaquesEvolucao: DestaqueEvolucao[] = evolucoes
-    .filter((e) => e.resumo.cargaDeltaPct !== null && e.resumo.cargaDeltaPct > 0)
-    .sort((a, b) => (b.resumo.cargaDeltaPct ?? 0) - (a.resumo.cargaDeltaPct ?? 0))
-    .slice(0, 3)
-    .map((e) => ({ alunoId: e.aluno.id, alunoNome: e.aluno.nome, cargaDeltaPct: Math.round(e.resumo.cargaDeltaPct!) }));
 
   // frase de abertura: template simples preenchido pelas métricas já calculadas
   // acima — sem geração de texto livre, só concatenação com base em contagem
@@ -304,8 +295,7 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
     radar: radarTopo,
     radarTotal,
     ciclosVencendoSemana,
-    financeiroSemana: { recebidoSemana, emAberto },
-    destaquesEvolucao,
+    financeiroSemana: { recebidoSemana, recebidoTendenciaPct, emAberto },
     resumo: {
       alunosAtivos: alunosAtivos.length,
       treinosConcluidosHoje,
@@ -326,19 +316,14 @@ function montarFraseAbertura(qtdAtrasados: number, qtdCiclosVencendo: number, ra
   return `${partes.join(" e ")}.`;
 }
 
-async function calcularAderenciaMedia(alunoIds: string[]): Promise<{ atual: number; tendenciaPP: number | null }> {
-  if (alunoIds.length === 0) return { atual: 0, tendenciaPP: null };
+async function calcularAderenciaMedia(
+  alunoIds: string[],
+  ciclos: { id: string; aluno_id: string }[]
+): Promise<{ atual: number; tendenciaPP: number | null }> {
+  if (alunoIds.length === 0 || ciclos.length === 0) return { atual: 0, tendenciaPP: null };
   const supabase = await createClient();
   const trintaDiasAtras = new Date(Date.now() - 30 * 86_400_000);
   const sessentaDiasAtras = new Date(Date.now() - 60 * 86_400_000);
-
-  const { data: ciclos } = await supabase
-    .from("ciclos")
-    .select("id, aluno_id")
-    .eq("ativo", true)
-    .in("aluno_id", alunoIds);
-
-  if (!ciclos || ciclos.length === 0) return { atual: 0, tendenciaPP: null };
 
   // aulas do ciclo e execuções dos últimos 60 dias não dependem uma da
   // outra — só de ciclos/alunoIds, já em mãos — então rodam em paralelo.

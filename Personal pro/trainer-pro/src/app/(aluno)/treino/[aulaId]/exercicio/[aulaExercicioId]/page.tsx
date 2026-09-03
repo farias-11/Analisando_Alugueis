@@ -22,10 +22,12 @@ export default async function ExecucaoExercicioPage({
   const { aluno } = await requireAluno();
   const { aulaId, aulaExercicioId } = await params;
 
-  const registro = (await getAulaExercicio(aulaExercicioId)) as RegistroCompleto | null;
+  const [registro, exerciciosDaAula] = (await Promise.all([
+    getAulaExercicio(aulaExercicioId),
+    getExerciciosDaAula(aulaId),
+  ])) as [RegistroCompleto | null, Awaited<ReturnType<typeof getExerciciosDaAula>>];
   if (!registro) notFound();
 
-  const exerciciosDaAula = await getExerciciosDaAula(aulaId);
   const ordem = exerciciosDaAula.map((e) => e.id);
   const posicaoAtual = ordem.indexOf(aulaExercicioId);
   const anterior = posicaoAtual > 0 ? exerciciosDaAula[posicaoAtual - 1] : null;
@@ -60,7 +62,7 @@ export default async function ExecucaoExercicioPage({
   ] = await Promise.all([
     getUltimaMarca(aluno.id, aulaExercicioId),
     getExecucoesDeHoje(aluno.id, aulaExercicioId),
-    getInicioTreinoHoje(aluno.id, aulaId),
+    getInicioTreinoHoje(aluno.id, ordem),
     parceiroId ? (getAulaExercicio(parceiroId) as Promise<RegistroCompleto | null>) : Promise.resolve(null),
     parceiroId ? getUltimaMarca(aluno.id, parceiroId) : Promise.resolve(null),
     parceiroId ? getExecucoesDeHoje(aluno.id, parceiroId) : Promise.resolve({}),

@@ -20,23 +20,22 @@ export default async function HomePage() {
   const { aluno } = await requireAluno();
   const supabase = await createClient();
 
-  // as quatro buscas abaixo são independentes entre si — só o treino de hoje
-  // tem uma cadeia interna (ciclo -> aulas -> aula do dia -> já fez) — então
-  // rodam em paralelo em vez de esperar uma pela outra.
-  const [{ ciclo, aulaHoje, jaFezHoje }, { concluidas, meta }, resumo, anamnese] = await Promise.all([
-    (async () => {
-      const ciclo = await getCicloAtivo(aluno.id);
-      const aulas = ciclo ? await getAulasDoCiclo(ciclo.id) : [];
-      const aulaHoje = await aulaDoDia(aluno.id, aulas);
-      const jaFezHoje = aulaHoje ? await aulaConcluidaHoje(aluno.id, aulaHoje.id) : false;
-      return { ciclo, aulaHoje, jaFezHoje };
-    })(),
-    getAderenciaSemana(aluno.id),
+  // ciclo ativo roda em paralelo com resumo/anamnese (não dependem dele);
+  // aulas só dá pra buscar depois de saber o ciclo. aulaHoje e aderência da
+  // semana usam as MESMAS aulas (uma query só, não duas) e rodam juntas.
+  const [ciclo, resumo, anamnese] = await Promise.all([
+    getCicloAtivo(aluno.id),
     getResumoEvolucao(aluno.id),
     aluno.anamnese_ativa
       ? supabase.from("anamneses").select("concluida").eq("aluno_id", aluno.id).maybeSingle()
       : Promise.resolve(null),
   ]);
+  const aulas = ciclo ? await getAulasDoCiclo(ciclo.id) : [];
+  const [aulaHoje, { concluidas, meta }] = await Promise.all([
+    aulaDoDia(aluno.id, aulas),
+    getAderenciaSemana(aluno.id, aulas),
+  ]);
+  const jaFezHoje = aulaHoje ? await aulaConcluidaHoje(aluno.id, aulaHoje.id) : false;
 
   const pendencias: { texto: string; href: string }[] = [];
   const diasSemMedidas = diasDesde(aluno.ultima_atualizacao_medidas);

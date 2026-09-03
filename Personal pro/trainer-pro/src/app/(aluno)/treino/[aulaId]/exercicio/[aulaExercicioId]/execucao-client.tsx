@@ -78,6 +78,18 @@ function MarcaMaxima({ marca }: { marca: Marca }) {
   );
 }
 
+/** Depois que a série é salva, mostrar exatamente o que foi feito (não o
+ * recorde histórico do MarcaMaxima) — senão parece que o app "marcou errado"
+ * quando na verdade é só o Máx. de uma sessão anterior aparecendo do lado. */
+function ValorFeito({ valor }: { valor: ValorSerie | undefined }) {
+  if (!valor || (valor.carga === null && valor.repeticoes === null)) return null;
+  return (
+    <span className="shrink-0 rounded-pill border border-success/40 bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success">
+      Feito: {valor.carga ?? "—"}kg x {valor.repeticoes ?? "—"} reps
+    </span>
+  );
+}
+
 export function ExecucaoClient({
   aulaId,
   aulaExercicio,
@@ -217,22 +229,24 @@ export function ExecucaoClient({
     startTransition(async () => {
       try {
         if (!navigator.onLine) throw new Error("offline");
-        await registrarSerie({
-          aulaExercicioId: aulaExercicioIdAtivo,
-          aulaId,
-          serieNumero: serieLocal,
-          carga: cargaNum,
-          repeticoes: repsNum,
-        });
-        if (parceiro) {
-          await registrarSerie({
-            aulaExercicioId: parceiro.id,
+        await Promise.all([
+          registrarSerie({
+            aulaExercicioId: aulaExercicioIdAtivo,
             aulaId,
-            serieNumero: serieSalva,
-            carga: cargaNumParceiro,
-            repeticoes: repsNumParceiro,
-          });
-        }
+            serieNumero: serieLocal,
+            carga: cargaNum,
+            repeticoes: repsNum,
+          }),
+          parceiro
+            ? registrarSerie({
+                aulaExercicioId: parceiro.id,
+                aulaId,
+                serieNumero: serieSalva,
+                carga: cargaNumParceiro,
+                repeticoes: repsNumParceiro,
+              })
+            : Promise.resolve(),
+        ]);
         router.refresh();
       } catch {
         enfileirarExecucao({
@@ -283,22 +297,24 @@ export function ExecucaoClient({
     startTransition(async () => {
       try {
         if (!navigator.onLine) throw new Error("offline");
-        await registrarTodasAsSeries({
-          aulaExercicioId: aulaExercicio.id,
-          aulaId,
-          totalSeries: aulaExercicio.series,
-          carga: cargaNum,
-          repeticoes: repsNum,
-        });
-        if (parceiro) {
-          await registrarTodasAsSeries({
-            aulaExercicioId: parceiro.id,
+        await Promise.all([
+          registrarTodasAsSeries({
+            aulaExercicioId: aulaExercicio.id,
             aulaId,
             totalSeries: aulaExercicio.series,
-            carga: cargaNumParceiro,
-            repeticoes: repsNumParceiro,
-          });
-        }
+            carga: cargaNum,
+            repeticoes: repsNum,
+          }),
+          parceiro
+            ? registrarTodasAsSeries({
+                aulaExercicioId: parceiro.id,
+                aulaId,
+                totalSeries: aulaExercicio.series,
+                carga: cargaNumParceiro,
+                repeticoes: repsNumParceiro,
+              })
+            : Promise.resolve(),
+        ]);
         router.refresh();
       } catch {
         enfileirarExecucao({
@@ -349,7 +365,15 @@ export function ExecucaoClient({
   return (
     <div className="space-y-4 p-4">
       {descansoAberto && (
-        <TimerDescanso duracaoSeg={(faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60} onFim={() => setDescansoAberto(false)} />
+        <TimerDescanso
+          duracaoSeg={(faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60}
+          onFim={() => {
+            setDescansoAberto(false);
+            // última série do exercício já feita — descanso acabou, já pode
+            // seguir pro próximo direto em vez de esperar o aluno tocar
+            if (todasAsSeriesFeitas) router.push(proximoHref);
+          }}
+        />
       )}
 
       <div className="overflow-hidden rounded-card bg-black">
@@ -502,7 +526,11 @@ export function ExecucaoClient({
 
           <p className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground">
             {faseAtual.alvo.exercicio?.nome ?? aulaExercicio.exercicio.nome}
-            <MarcaMaxima marca={faseAtual.ehAquecimento ? ultimaMarca : marcaAtualParaBadge} />
+            {seriesFeitas.includes(serieAtual) ? (
+              <ValorFeito valor={valorAtual} />
+            ) : (
+              <MarcaMaxima marca={faseAtual.ehAquecimento ? ultimaMarca : marcaAtualParaBadge} />
+            )}
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -530,7 +558,11 @@ export function ExecucaoClient({
             <>
               <p className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground">
                 {parceiro.exercicio.nome}
-                <MarcaMaxima marca={ultimaMarcaParceiro} />
+                {seriesFeitas.includes(serieAtual) ? (
+                  <ValorFeito valor={valoresPorSerieParceiro[serieAtual]} />
+                ) : (
+                  <MarcaMaxima marca={ultimaMarcaParceiro} />
+                )}
               </p>
               <div className="grid grid-cols-2 gap-3">
                 <div>

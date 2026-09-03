@@ -14,7 +14,6 @@ import {
   Layers,
   Library,
   MessageCircleWarning,
-  TrendingUp,
   UserPlus,
 } from "lucide-react";
 import { InstallPromptBanner } from "@/components/install-prompt-banner";
@@ -31,7 +30,7 @@ const RÓTULO_TIPO: Record<string, { cor: string }> = {
 export default async function DashboardPage() {
   const { personal } = await requirePersonal();
   const data = await getDashboardData(personal.id);
-  const { radar, radarTotal, ciclosVencendoSemana, financeiroSemana, destaquesEvolucao, resumo } = data;
+  const { radar, radarTotal, ciclosVencendoSemana, financeiroSemana, resumo } = data;
 
   return (
     <div className="space-y-5 p-4 md:p-0">
@@ -117,7 +116,17 @@ export default async function DashboardPage() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-xs text-muted">Recebido nos últimos 7 dias</p>
-            <p className="text-lg font-bold text-success">{formatMoedaBR(financeiroSemana.recebidoSemana)}</p>
+            <p className="flex items-center gap-1 text-lg font-bold text-success">
+              {formatMoedaBR(financeiroSemana.recebidoSemana)}
+              {financeiroSemana.recebidoTendenciaPct !== null && financeiroSemana.recebidoTendenciaPct !== 0 && (
+                <span
+                  className={`flex items-center text-xs font-semibold ${financeiroSemana.recebidoTendenciaPct > 0 ? "text-success" : "text-danger"}`}
+                >
+                  {financeiroSemana.recebidoTendenciaPct > 0 ? <ArrowUp size={11} /> : <ArrowDown size={11} />}
+                  {Math.abs(financeiroSemana.recebidoTendenciaPct)}%
+                </span>
+              )}
+            </p>
           </div>
           <div className="text-right">
             <p className="text-xs text-muted">Em aberto</p>
@@ -153,22 +162,10 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      {/* Destaques de evolução (2.6) */}
-      {destaquesEvolucao.length > 0 && (
-        <Card>
-          <CardTitle className="mb-2 flex items-center gap-1.5">
-            <TrendingUp size={16} className="text-success" /> Destaques de evolução
-          </CardTitle>
-          <div className="space-y-1.5">
-            {destaquesEvolucao.map((d) => (
-              <Link key={d.alunoId} href={`/alunos/${d.alunoId}?aba=historico`} className="flex items-center justify-between text-sm">
-                <span className="text-foreground">{d.alunoNome}</span>
-                <span className="font-semibold text-success">+{d.cargaDeltaPct}% carga</span>
-              </Link>
-            ))}
-          </div>
-        </Card>
-      )}
+      {/* "Destaques de evolução" foi removido a pedido do pack — ainda não tem
+          visual aprovado. O cálculo (getResumoEvolucao por aluno) também saiu
+          de getDashboardData porque era um N+1 caro sem nada usando o
+          resultado; reintroduzir de forma batched quando o design chegar. */}
 
       <div>
         <CardTitle className="mb-2">Atalhos rápidos</CardTitle>
