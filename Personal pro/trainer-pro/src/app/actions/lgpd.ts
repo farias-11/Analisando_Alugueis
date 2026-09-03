@@ -1,16 +1,18 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { requireAluno } from "@/lib/data/current-user";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { notificarPersonal } from "@/lib/notificar";
 import { revalidatePath } from "next/cache";
 import { PRAZO_EXCLUSAO_DIAS } from "@/lib/constantes";
 
 export async function revogarConsentimentoSaude() {
   const { aluno } = await requireAluno();
-  const supabase = await createClient();
 
-  await supabase
+  // aluno só tem select na própria linha de "alunos" — sem policy de update,
+  // essa chamada ficava um no-op silencioso (sem erro, sem revogar nada de
+  // verdade). Update precisa do client admin.
+  await createAdminClient()
     .from("alunos")
     .update({
       consentimento_saude_aceito: false,
@@ -29,10 +31,9 @@ export async function revogarConsentimentoSaude() {
 
 export async function solicitarExclusaoConta() {
   const { aluno } = await requireAluno();
-  const supabase = await createClient();
 
   const agora = new Date();
-  await supabase
+  await createAdminClient()
     .from("alunos")
     .update({ exclusao_solicitada_em: agora.toISOString() })
     .eq("id", aluno.id);

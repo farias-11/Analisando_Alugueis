@@ -34,7 +34,10 @@ export async function salvarMedidas(
 
   if (error) return { error: "Não foi possível salvar suas medidas." };
 
-  await supabase
+  // aluno não tem policy de update na própria linha de "alunos" (só select) —
+  // usa o client admin pra esse campo específico, igual já é feito em outros
+  // pontos de self-service do aluno (ver conta.ts, lgpd.ts).
+  await createAdminClient()
     .from("alunos")
     .update({ ultima_atualizacao_medidas: new Date().toISOString() })
     .eq("id", aluno.id);

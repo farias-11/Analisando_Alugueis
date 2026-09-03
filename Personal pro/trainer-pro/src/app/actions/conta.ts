@@ -40,21 +40,23 @@ export async function atualizarFotoAluno(formData: FormData) {
   if (error || !upload) return;
 
   const { data: pub } = admin.storage.from("avatares").getPublicUrl(upload.path);
-  const supabase = await createClient();
-  await supabase.from("alunos").update({ foto_url: pub.publicUrl }).eq("id", aluno.id);
+  // aluno não tem policy de update na própria linha de "alunos" (só select) —
+  // usa o client admin, já criado acima pro upload da foto.
+  await admin.from("alunos").update({ foto_url: pub.publicUrl }).eq("id", aluno.id);
 
   revalidatePath("/conta");
 }
 
 export async function atualizarPreferenciasNotificacaoAluno(formData: FormData) {
   const { aluno } = await requireAluno();
-  const supabase = await createClient();
 
   const preferencias: Record<string, boolean> = {};
   for (const { tipo } of TIPOS_NOTIFICACAO_ALUNO) {
     preferencias[tipo] = formData.get(`pref_${tipo}`) === "on";
   }
 
-  await supabase.from("alunos").update({ notificacoes_preferencias: preferencias }).eq("id", aluno.id);
+  // idem: aluno só tem select na própria linha de "alunos", update precisa
+  // do client admin.
+  await createAdminClient().from("alunos").update({ notificacoes_preferencias: preferencias }).eq("id", aluno.id);
   revalidatePath("/conta");
 }
