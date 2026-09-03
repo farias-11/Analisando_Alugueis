@@ -11,7 +11,7 @@ export default function LoginPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold tracking-tight">DUO FLOW</h1>
-            <p className="text-sm text-muted">Painel do personal trainer</p>
+            <p className="text-sm text-muted">O vínculo entre você e seu personal</p>
           </div>
         </div>
 

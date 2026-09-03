@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { statusCiclo, diasDesde, diasRestantes as calcDiasRestantes } from "@/lib/status";
+import { diasDesde, diasRestantes as calcDiasRestantes } from "@/lib/status";
 import { buildWhatsappLink, mensagemCobranca } from "@/lib/whatsapp";
 
 export type TipoRadar =
@@ -25,29 +25,40 @@ export interface CicloVencendoItem {
   diasRestantes: number;
 }
 
+export interface DestaqueEvolucao {
+  alunoId: string;
+  alunoNome: string;
+  fotoUrl: string | null;
+  cargaDeltaPct: number;
+}
+
+export type Periodo = "semana" | "mes" | "ano";
+export const PERIODOS: { valor: Periodo; label: string; dias: number }[] = [
+  { valor: "mes", label: "Mês", dias: 30 },
+  { valor: "semana", label: "Semana", dias: 7 },
+  { valor: "ano", label: "Ano", dias: 365 },
+];
+
 export interface DashboardData {
-  fraseAbertura: string;
+  periodo: Periodo;
   radar: ItemRadar[];
   radarTotal: number;
-  ciclosVencendoSemana: CicloVencendoItem[];
-  financeiroSemana: { recebidoSemana: number; recebidoTendenciaPct: number | null; emAberto: number };
-  resumo: {
+  ciclosVencendo: CicloVencendoItem[];
+  destaquesEvolucao: DestaqueEvolucao[];
+  financeiroPeriodo: { recebido: number; recebidoTendenciaPct: number | null; emAberto: number };
+  kpis: {
     alunosAtivos: number;
-    treinosConcluidosHoje: number;
-    aderenciaMedia: number;
-    /** pontos percentuais vs. os 30 dias anteriores — null quando não dá pra
-     * comparar (sem ciclo/execução suficiente no período anterior). Only
-     * este indicador ganhou tendência nesta rodada (handoff 2.2): os outros
-     * (alunos ativos, treinos hoje) exigiriam guardar um snapshot histórico
-     * à parte pra comparar "de verdade", o que fica pra uma v2. */
+    alunosAtivosTendencia: number;
+    treinosParaRevisar: number;
+    aderenciaPct: number;
     aderenciaTendenciaPP: number | null;
+    ticketsAbertos: number;
+    ticketsTendenciaPct: number | null;
   };
 }
 
 // Peso por tipo de item — soma à urgência em dias, não substitui (handoff,
 // seção 2.3: "urgência como fator primário, com peso adicional por tipo").
-// Escolha simples pra v1: pagamento > ticket > ciclo vencido > sem check-in >
-// avaliação pendente. Ajustável sem quebrar nada — é só esse mapa.
 const PESO_TIPO: Record<TipoRadar, number> = {
   pagamento_atrasado: 30,
   ticket_aberto: 25,
@@ -58,19 +69,21 @@ const PESO_TIPO: Record<TipoRadar, number> = {
 
 const MAX_ITENS_RADAR = 8;
 
-export async function getDashboardData(personalId: string): Promise<DashboardData> {
+export async function getDashboardData(personalId: string, periodo: Periodo = "semana"): Promise<DashboardData> {
   const supabase = await createClient();
+  const diasPeriodo = PERIODOS.find((p) => p.valor === periodo)!.dias;
 
   const { data: alunos } = await supabase
     .from("alunos")
     .select(
-      "id, nome, whatsapp, status, status_convite, pagamento_status, pagamento_vencimento, pagamento_valor, data_inicio, anamnese_ativa, bioimpedancia_ativa, bioimpedancia_frequencia_dias, ultima_atualizacao_medidas, planos(valor)"
+      "id, nome, foto_url, whatsapp, status, status_convite, pagamento_status, pagamento_vencimento, pagamento_valor, data_inicio, anamnese_ativa, bioimpedancia_ativa, bioimpedancia_frequencia_dias, ultima_atualizacao_medidas, planos(valor)"
     )
     .eq("personal_id", personalId);
 
   type AlunoRadar = {
     id: string;
     nome: string;
+    foto_url: string | null;
     whatsapp: string | null;
     status: string;
     status_convite: string;
@@ -95,28 +108,31 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
   const alunoIds = alunosAtivos.map((a) => a.id);
   const idsOuVazio = alunoIds.length ? alunoIds : ["00000000-0000-0000-0000-000000000000"];
   const nomePorAluno = new Map(alunosAtivos.map((a) => [a.id, a.nome]));
+  const fotoPorAluno = new Map(alunosAtivos.map((a) => [a.id, a.foto_url]));
 
   const comAnamnese = alunosAtivos.filter((a) => a.anamnese_ativa).map((a) => a.id);
   const comBio = alunosAtivos.filter((a) => a.bioimpedancia_ativa && a.bioimpedancia_frequencia_dias);
 
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
-  const seteDiasAtras = new Date(Date.now() - 7 * 86_400_000).toISOString().slice(0, 10);
-  const catorzeDiasAtras = new Date(Date.now() - 14 * 86_400_000).toISOString().slice(0, 10);
+  const inicioPeriodo = new Date();
+  inicioPeriodo.setDate(inicioPeriodo.getDate() - diasPeriodo);
+  const inicioPeriodoStr = inicioPeriodo.toISOString().slice(0, 10);
+  const inicioPeriodoAnterior = new Date();
+  inicioPeriodoAnterior.setDate(inicioPeriodoAnterior.getDate() - diasPeriodo * 2);
 
   const [
-    { data: ticketsAbertos },
+    { data: ticketsAbertosData },
+    { data: ticketsPeriodo },
     { data: ciclosAtivos },
     { data: anamneses },
     { data: bioUltimas },
-    { data: execHoje },
-    { data: pagamentosSemana },
+    { data: pagamentosPeriodo },
   ] = await Promise.all([
+    supabase.from("tickets").select("id, aluno_id, created_at").eq("status", "aberto").in("aluno_id", idsOuVazio),
     supabase
       .from("tickets")
-      .select("id, aluno_id, created_at")
-      .eq("status", "aberto")
-      .in("aluno_id", idsOuVazio),
+      .select("created_at")
+      .in("aluno_id", idsOuVazio)
+      .gte("created_at", inicioPeriodoAnterior.toISOString()),
     supabase.from("ciclos").select("id, aluno_id, data_fim").eq("ativo", true).in("aluno_id", idsOuVazio),
     comAnamnese.length
       ? supabase.from("anamneses").select("aluno_id, concluida").in("aluno_id", comAnamnese)
@@ -132,20 +148,18 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
           .order("data", { ascending: false })
       : Promise.resolve({ data: [] as { aluno_id: string; data: string }[] }),
     supabase
-      .from("execucoes")
-      .select("aula_exercicios(aula_id)")
-      .in("aluno_id", idsOuVazio)
-      .gte("data", hojeInicio.toISOString()),
-    supabase
       .from("pagamentos")
       .select("valor, aluno_id, data_pagamento")
       .in("aluno_id", idsOuVazio)
-      .gte("data_pagamento", catorzeDiasAtras),
+      .gte("data_pagamento", inicioPeriodoAnterior.toISOString().slice(0, 10)),
   ]);
 
-  // reaproveita os ciclos ativos já buscados acima em vez de consultar nível
-  // "ciclos ativos" de novo dentro de calcularAderenciaMedia
-  const aderenciaMedia = await calcularAderenciaMedia(alunoIds, ciclosAtivos ?? []);
+  // reaproveita os ciclos ativos já buscados acima em vez de consultar de
+  // novo dentro de calcularAderenciaMedia
+  const [aderenciaMedia, destaquesEvolucao] = await Promise.all([
+    calcularAderenciaMedia(alunoIds, ciclosAtivos ?? [], diasPeriodo),
+    calcularDestaquesEvolucao(alunoIds, nomePorAluno, fotoPorAluno),
+  ]);
 
   const radar: ItemRadar[] = [];
 
@@ -174,7 +188,7 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
   }
 
   // --- tickets de dor abertos ---
-  for (const t of ticketsAbertos ?? []) {
+  for (const t of ticketsAbertosData ?? []) {
     const dias = diasDesde(t.created_at) ?? 0;
     radar.push({
       alunoId: t.aluno_id,
@@ -186,12 +200,13 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
     });
   }
 
-  // --- ciclos vencidos (o vencendo fica só na faixa da semana, 2.4) ---
-  const ciclosVencendoSemana: CicloVencendoItem[] = [];
+  // --- ciclos vencidos (radar) e vencendo dentro do período (faixa) ---
+  let treinosParaRevisar = 0;
+  const ciclosVencendo: CicloVencendoItem[] = [];
   for (const c of ciclosAtivos ?? []) {
-    const status = statusCiclo(c.data_fim);
     const restantes = calcDiasRestantes(c.data_fim);
-    if (status === "vencido") {
+    if (restantes < 0) {
+      treinosParaRevisar++;
       radar.push({
         alunoId: c.aluno_id,
         alunoNome: nomePorAluno.get(c.aluno_id) ?? "Aluno",
@@ -200,15 +215,18 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
         diasEmAberto: Math.abs(restantes),
         acao: { label: "Renovar", href: `/alunos/${c.aluno_id}/treino` },
       });
-    } else if (status === "vencendo") {
-      ciclosVencendoSemana.push({
+    } else if (restantes <= 7) {
+      // fixo em 7 dias independente do período selecionado — é um aviso de
+      // "vem chegando", não uma janela de relatório que faz sentido esticar
+      // pro ano inteiro (aí mostraria todo mundo, perderia o propósito)
+      ciclosVencendo.push({
         alunoId: c.aluno_id,
         alunoNome: nomePorAluno.get(c.aluno_id) ?? "Aluno",
         diasRestantes: restantes,
       });
     }
   }
-  ciclosVencendoSemana.sort((a, b) => a.diasRestantes - b.diasRestantes);
+  ciclosVencendo.sort((a, b) => a.diasRestantes - b.diasRestantes);
 
   // --- sem check-in (sem atualizar medidas) há 14+ dias ---
   for (const a of alunosAtivos) {
@@ -266,69 +284,129 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
   const radarTotal = radar.length;
   const radarTopo = radar.slice(0, MAX_ITENS_RADAR);
 
-  const treinosConcluidosHoje = new Set(
-    ((execHoje ?? []) as unknown as { aula_exercicios: { aula_id: string } | null }[])
-      .map((e) => e.aula_exercicios?.aula_id)
-      .filter(Boolean)
-  ).size;
-
-  const recebidoSemana = (pagamentosSemana ?? [])
-    .filter((p) => p.data_pagamento >= seteDiasAtras)
+  const recebido = (pagamentosPeriodo ?? [])
+    .filter((p) => p.data_pagamento >= inicioPeriodoStr)
     .reduce((s, p) => s + Number(p.valor), 0);
-  const recebidoSemanaAnterior = (pagamentosSemana ?? [])
-    .filter((p) => p.data_pagamento < seteDiasAtras)
+  const recebidoAnterior = (pagamentosPeriodo ?? [])
+    .filter((p) => p.data_pagamento < inicioPeriodoStr)
     .reduce((s, p) => s + Number(p.valor), 0);
   const recebidoTendenciaPct =
-    recebidoSemanaAnterior > 0 ? Math.round(((recebidoSemana - recebidoSemanaAnterior) / recebidoSemanaAnterior) * 100) : null;
+    recebidoAnterior > 0 ? Math.round(((recebido - recebidoAnterior) / recebidoAnterior) * 100) : null;
   const emAberto = alunosAtivos
     .filter((a) => a.pagamento_status === "atrasado")
     .reduce((s, a) => s + Number(a.pagamento_valor ?? 0), 0);
 
-  // frase de abertura: template simples preenchido pelas métricas já calculadas
-  // acima — sem geração de texto livre, só concatenação com base em contagem
-  const qtdAtrasados = radar.filter((r) => r.tipo === "pagamento_atrasado").length;
-  const qtdCiclosVencendo = ciclosVencendoSemana.length;
-  const fraseAbertura = montarFraseAbertura(qtdAtrasados, qtdCiclosVencendo, radarTotal);
+  // tickets: volume de novos tickets no período vs período anterior (não dá
+  // pra saber quantos estavam ABERTOS num ponto passado sem um snapshot
+  // histórico — isso aqui mede o fluxo de entrada, que é o que dá pra provar
+  // com o que já existe: created_at de verdade, sem inventar número)
+  const inicioPeriodoAnteriorStr = inicioPeriodoAnterior.toISOString().slice(0, 10);
+  const ticketsNoPeriodo = (ticketsPeriodo ?? []).filter((t) => t.created_at >= inicioPeriodo.toISOString()).length;
+  const ticketsNoPeriodoAnterior = (ticketsPeriodo ?? []).filter(
+    (t) => t.created_at < inicioPeriodo.toISOString() && t.created_at >= inicioPeriodoAnteriorStr
+  ).length;
+  const ticketsTendenciaPct =
+    ticketsNoPeriodoAnterior > 0
+      ? Math.round(((ticketsNoPeriodo - ticketsNoPeriodoAnterior) / ticketsNoPeriodoAnterior) * 100)
+      : null;
+
+  // alunos ativos entrados no período (data_inicio é fixo por aluno, nunca
+  // é substituído como um ciclo — ao contrário de "treinos p/ revisar", dá
+  // pra reconstruir essa contagem de forma confiável a partir do que já
+  // existe. É contagem de entradas, não delta líquido (não detecta quem
+  // saiu), mas é o que dá pra provar sem inventar número.
+  const alunosAtivosTendencia = alunosAtivos.filter((a) => a.data_inicio >= inicioPeriodoStr).length;
 
   return {
-    fraseAbertura,
+    periodo,
     radar: radarTopo,
     radarTotal,
-    ciclosVencendoSemana,
-    financeiroSemana: { recebidoSemana, recebidoTendenciaPct, emAberto },
-    resumo: {
+    ciclosVencendo,
+    destaquesEvolucao,
+    financeiroPeriodo: { recebido, recebidoTendenciaPct, emAberto },
+    kpis: {
       alunosAtivos: alunosAtivos.length,
-      treinosConcluidosHoje,
-      aderenciaMedia: aderenciaMedia.atual,
+      alunosAtivosTendencia,
+      treinosParaRevisar,
+      aderenciaPct: aderenciaMedia.atual,
       aderenciaTendenciaPP: aderenciaMedia.tendenciaPP,
+      ticketsAbertos: (ticketsAbertosData ?? []).length,
+      ticketsTendenciaPct,
     },
   };
 }
 
-function montarFraseAbertura(qtdAtrasados: number, qtdCiclosVencendo: number, radarTotal: number): string {
-  const partes: string[] = [];
-  if (qtdAtrasados > 0) partes.push(`${qtdAtrasados} aluno${qtdAtrasados === 1 ? "" : "s"} com pagamento atrasado`);
-  if (qtdCiclosVencendo > 0) partes.push(`${qtdCiclosVencendo} ciclo${qtdCiclosVencendo === 1 ? "" : "s"} vencendo esta semana`);
+/** Top 3 alunos por evolução de carga no período — versão batched (2 queries
+ * no total, não 1 por aluno) pra não repetir o N+1 que essa mesma conta já
+ * teve antes. */
+async function calcularDestaquesEvolucao(
+  alunoIds: string[],
+  nomePorAluno: Map<string, string>,
+  fotoPorAluno: Map<string, string | null>
+): Promise<DestaqueEvolucao[]> {
+  if (alunoIds.length === 0) return [];
+  const supabase = await createClient();
+  const trintaDiasAtras = new Date(Date.now() - 30 * 86_400_000).toISOString();
+  const sessentaDiasAtras = new Date(Date.now() - 60 * 86_400_000).toISOString();
 
-  if (partes.length === 0) {
-    return radarTotal > 0 ? "Nada urgente, mas dá uma olhada nas pendências abaixo." : "Tudo em dia por aqui. 🎉";
+  const [{ data: execAtual }, { data: execAnterior }] = await Promise.all([
+    supabase.from("execucoes").select("aluno_id, carga").in("aluno_id", alunoIds).gte("data", trintaDiasAtras).not("carga", "is", null),
+    supabase
+      .from("execucoes")
+      .select("aluno_id, carga")
+      .in("aluno_id", alunoIds)
+      .gte("data", sessentaDiasAtras)
+      .lt("data", trintaDiasAtras)
+      .not("carga", "is", null),
+  ]);
+
+  const somaPorAluno = (rows: { aluno_id: string; carga: number | null }[] | null) => {
+    const soma = new Map<string, { total: number; qtd: number }>();
+    for (const r of rows ?? []) {
+      const atual = soma.get(r.aluno_id) ?? { total: 0, qtd: 0 };
+      atual.total += Number(r.carga);
+      atual.qtd += 1;
+      soma.set(r.aluno_id, atual);
+    }
+    return soma;
+  };
+
+  const mediaAtualPorAluno = somaPorAluno(execAtual);
+  const mediaAnteriorPorAluno = somaPorAluno(execAnterior);
+
+  const destaques: DestaqueEvolucao[] = [];
+  for (const alunoId of alunoIds) {
+    const atual = mediaAtualPorAluno.get(alunoId);
+    const anterior = mediaAnteriorPorAluno.get(alunoId);
+    if (!atual || !anterior || anterior.total <= 0) continue;
+    const mediaAtual = atual.total / atual.qtd;
+    const mediaAnterior = anterior.total / anterior.qtd;
+    const deltaPct = ((mediaAtual - mediaAnterior) / mediaAnterior) * 100;
+    if (deltaPct <= 0) continue;
+    destaques.push({
+      alunoId,
+      alunoNome: nomePorAluno.get(alunoId) ?? "Aluno",
+      fotoUrl: fotoPorAluno.get(alunoId) ?? null,
+      cargaDeltaPct: Math.round(deltaPct),
+    });
   }
-  return `${partes.join(" e ")}.`;
+
+  return destaques.sort((a, b) => b.cargaDeltaPct - a.cargaDeltaPct).slice(0, 3);
 }
 
 async function calcularAderenciaMedia(
   alunoIds: string[],
-  ciclos: { id: string; aluno_id: string }[]
+  ciclos: { id: string; aluno_id: string }[],
+  diasJanela: number
 ): Promise<{ atual: number; tendenciaPP: number | null }> {
   if (alunoIds.length === 0 || ciclos.length === 0) return { atual: 0, tendenciaPP: null };
   const supabase = await createClient();
-  const trintaDiasAtras = new Date(Date.now() - 30 * 86_400_000);
-  const sessentaDiasAtras = new Date(Date.now() - 60 * 86_400_000);
+  const inicioJanela = new Date(Date.now() - diasJanela * 86_400_000);
+  const inicioJanelaAnterior = new Date(Date.now() - diasJanela * 2 * 86_400_000);
 
-  // aulas do ciclo e execuções dos últimos 60 dias não dependem uma da
-  // outra — só de ciclos/alunoIds, já em mãos — então rodam em paralelo.
-  // Busca 60 dias (não só 30) pra dar pra calcular a janela anterior também
-  // (tendência, handoff 2.2) sem uma segunda ida ao banco.
+  // aulas do ciclo e execuções da janela (atual + anterior) não dependem uma
+  // da outra — rodam em paralelo. Busca 2x a janela pra calcular a tendência
+  // sem uma segunda ida ao banco.
   const [{ data: aulas }, { data: execs }] = await Promise.all([
     supabase
       .from("aulas")
@@ -341,7 +419,7 @@ async function calcularAderenciaMedia(
       .from("execucoes")
       .select("aluno_id, data, aula_exercicios(aula_id)")
       .in("aluno_id", alunoIds)
-      .gte("data", sessentaDiasAtras.toISOString()),
+      .gte("data", inicioJanelaAnterior.toISOString()),
   ]);
 
   const aulasPorCiclo = new Map<string, number>();
@@ -349,9 +427,9 @@ async function calcularAderenciaMedia(
     aulasPorCiclo.set(a.ciclo_id, (aulasPorCiclo.get(a.ciclo_id) ?? 0) + 1);
   }
 
-  // sessões (aula x dia) separadas por janela — atual (últimos 30d) e
-  // anterior (30-60d atrás) — não só quais aulas já foram feitas alguma vez,
-  // senão o teto ficaria em ~23% independente de quanto o aluno treina.
+  // sessões (aula x dia) separadas por janela — atual e anterior — não só
+  // quais aulas já foram feitas alguma vez, senão o teto ficaria baixo
+  // independente de quanto o aluno treina
   const sessoesAtualPorAluno = new Map<string, Set<string>>();
   const sessoesAnteriorPorAluno = new Map<string, Set<string>>();
   for (const e of (execs ?? []) as unknown as {
@@ -363,7 +441,7 @@ async function calcularAderenciaMedia(
     if (!aulaId) continue;
     const dataExec = new Date(e.data);
     const chave = `${aulaId}_${e.data.slice(0, 10)}`;
-    const mapa = dataExec >= trintaDiasAtras ? sessoesAtualPorAluno : sessoesAnteriorPorAluno;
+    const mapa = dataExec >= inicioJanela ? sessoesAtualPorAluno : sessoesAnteriorPorAluno;
     const set = mapa.get(e.aluno_id) ?? new Set<string>();
     set.add(chave);
     mapa.set(e.aluno_id, set);
@@ -371,7 +449,7 @@ async function calcularAderenciaMedia(
 
   const percentual = (sessoesPorAluno: Map<string, Set<string>>) => {
     const valores = ciclos.map((c) => {
-      const metaSessoes = Math.max((aulasPorCiclo.get(c.id) ?? 0) * 4.3, 1);
+      const metaSessoes = Math.max((aulasPorCiclo.get(c.id) ?? 0) * (diasJanela / 7), 1);
       const feitas = sessoesPorAluno.get(c.aluno_id)?.size ?? 0;
       return Math.min(100, (feitas / metaSessoes) * 100);
     });
@@ -380,7 +458,7 @@ async function calcularAderenciaMedia(
 
   const atual = percentual(sessoesAtualPorAluno);
   // só mostra tendência se havia alguma sessão na janela anterior — senão um
-  // aluno que só começou há 20 dias faria a "queda" parecer maior do que é
+  // aluno que só começou recentemente faria a "queda" parecer maior do que é
   const houveSessaoAnterior = Array.from(sessoesAnteriorPorAluno.values()).some((s) => s.size > 0);
   const tendenciaPP = houveSessaoAnterior ? atual - percentual(sessoesAnteriorPorAluno) : null;
 

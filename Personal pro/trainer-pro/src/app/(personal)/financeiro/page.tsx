@@ -3,7 +3,8 @@ import { createClient } from "@/lib/supabase/server";
 import { Card } from "@/components/ui/card";
 import { formatDataBR, formatMoedaBR } from "@/lib/status";
 import { FinanceiroListaSelecionavel } from "@/components/financeiro-lista-selecionavel";
-import { SimpleLineChart } from "@/components/charts/simple-line-chart";
+import { DualBarChart, type DualBarPoint } from "@/components/charts/dual-bar-chart";
+import { DonutChart, type DonutSlice } from "@/components/charts/donut-chart";
 import { ExportarCsvButton, ExportarCsvButtonAReceber } from "@/components/exportar-csv-button";
 import { ArrowDown, ArrowUp } from "lucide-react";
 import Link from "next/link";
@@ -29,6 +30,19 @@ const PERIODOS = [
 ] as const;
 type Periodo = (typeof PERIODOS)[number]["valor"];
 
+const COMPARACOES = [
+  { valor: "mes", label: "Mês a mês" },
+  { valor: "ano_anterior", label: "Ano a ano" },
+] as const;
+type Comparar = (typeof COMPARACOES)[number]["valor"];
+
+const CORES_FORMA_PAGAMENTO: Record<string, string> = {
+  Pix: "var(--primary)",
+  Cartão: "var(--success)",
+  Dinheiro: "var(--warning)",
+  Transferência: "var(--muted-2)",
+};
+
 function chaveMes(iso: string) {
   return iso.slice(0, 7); // "AAAA-MM"
 }
@@ -47,6 +61,64 @@ function deltaPct(atual: number, anterior: number): number | null {
   return Math.round(((atual - anterior) / anterior) * 100);
 }
 
+// "Recebido" vem do histórico real de pagamentos; "a receber" só existe como
+// fotografia da cobrança atual de cada aluno (pagamento_valor/vencimento não
+// guardam histórico de meses passados) — por isso a coluna "a receber" só
+// aparece de fato nos meses atual/próximo, onde há vencimento pendente.
+function buildRecebidoVsAReceber(filtrados: PagamentoComAluno[], alunos: AlunoComPlano[]): DualBarPoint[] {
+  const recebidoPorMes = new Map<string, number>();
+  for (const p of filtrados) {
+    const chave = chaveMes(p.data_pagamento);
+    recebidoPorMes.set(chave, (recebidoPorMes.get(chave) ?? 0) + Number(p.valor));
+  }
+  const aReceberPorMes = new Map<string, number>();
+  for (const a of alunos) {
+    if (!a.pagamento_vencimento) continue;
+    const chave = chaveMes(a.pagamento_vencimento);
+    aReceberPorMes.set(chave, (aReceberPorMes.get(chave) ?? 0) + Number(a.pagamento_valor ?? 0));
+  }
+  const chaves = Array.from(new Set([...recebidoPorMes.keys(), ...aReceberPorMes.keys()])).sort();
+  return chaves.map((chave) => ({
+    data: tituloMes(chave),
+    a: Math.round((recebidoPorMes.get(chave) ?? 0) * 100) / 100,
+    b: Math.round((aReceberPorMes.get(chave) ?? 0) * 100) / 100,
+  }));
+}
+
+// compara os 12 meses do ano atual com os mesmos meses do ano anterior —
+// usa todo o histórico já carregado (não respeita o filtro de período,
+// que é uma janela rolante e não faz sentido pra comparação de época).
+function buildComparacaoAno(pagamentos: PagamentoComAluno[], anoAtual: number): DualBarPoint[] {
+  const porChave = new Map<string, number>();
+  for (const p of pagamentos) {
+    const chave = chaveMes(p.data_pagamento);
+    porChave.set(chave, (porChave.get(chave) ?? 0) + Number(p.valor));
+  }
+  const anoAnterior = anoAtual - 1;
+  return NOMES_MES.map((nome, i) => {
+    const mm = String(i + 1).padStart(2, "0");
+    return {
+      data: nome,
+      a: Math.round((porChave.get(`${anoAtual}-${mm}`) ?? 0) * 100) / 100,
+      b: Math.round((porChave.get(`${anoAnterior}-${mm}`) ?? 0) * 100) / 100,
+    };
+  });
+}
+
+function buildComposicaoFormaPagamento(filtrados: PagamentoComAluno[]): DonutSlice[] {
+  const porForma = new Map<string, number>();
+  for (const p of filtrados) {
+    porForma.set(p.forma_pagamento, (porForma.get(p.forma_pagamento) ?? 0) + Number(p.valor));
+  }
+  return Array.from(porForma.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, valor]) => ({
+      label,
+      valor: Math.round(valor * 100) / 100,
+      cor: CORES_FORMA_PAGAMENTO[label] ?? "var(--muted-2)",
+    }));
+}
+
 function DeltaBadge({ pct }: { pct: number | null }) {
   if (pct === null || pct === 0) return null;
   return (
@@ -60,11 +132,12 @@ function DeltaBadge({ pct }: { pct: number | null }) {
 export default async function FinanceiroPage({
   searchParams,
 }: {
-  searchParams: Promise<{ aba?: string; periodo?: string }>;
+  searchParams: Promise<{ aba?: string; periodo?: string; comparar?: string }>;
 }) {
   const { personal } = await requirePersonal();
-  const { aba = "a_receber", periodo: periodoParam } = await searchParams;
+  const { aba = "a_receber", periodo: periodoParam, comparar: compararParam } = await searchParams;
   const periodo: Periodo = PERIODOS.some((p) => p.valor === periodoParam) ? (periodoParam as Periodo) : "6m";
+  const comparar: Comparar = COMPARACOES.some((c) => c.valor === compararParam) ? (compararParam as Comparar) : "mes";
   const supabase = await createClient();
 
   // busca tudo de uma vez (personal costuma ter poucas dezenas de alunos e
@@ -135,7 +208,7 @@ export default async function FinanceiroPage({
       <Abas aba={aba} />
 
       {aba === "recebidos" ? (
-        <AbaRecebidos pagamentos={todosPagamentos} periodo={periodo} />
+        <AbaRecebidos pagamentos={todosPagamentos} alunos={alunos} periodo={periodo} comparar={comparar} />
       ) : (
         <AbaAReceber alunos={alunos} />
       )}
@@ -143,30 +216,59 @@ export default async function FinanceiroPage({
   );
 }
 
-function AbaRecebidos({ pagamentos, periodo }: { pagamentos: PagamentoComAluno[]; periodo: Periodo }) {
+function AbaRecebidos({
+  pagamentos,
+  alunos,
+  periodo,
+  comparar,
+}: {
+  pagamentos: PagamentoComAluno[];
+  alunos: AlunoComPlano[];
+  periodo: Periodo;
+  comparar: Comparar;
+}) {
   const configPeriodo = PERIODOS.find((p) => p.valor === periodo)!;
   const corte = configPeriodo.meses ? chaveMesDeslocada(-(configPeriodo.meses - 1)) : null;
   const filtrados = corte ? pagamentos.filter((p) => chaveMes(p.data_pagamento) >= corte) : pagamentos;
 
   const total = filtrados.reduce((s, p) => s + Number(p.valor), 0);
-
-  const porMes = new Map<string, number>();
-  for (const p of filtrados) {
-    const chave = chaveMes(p.data_pagamento);
-    porMes.set(chave, (porMes.get(chave) ?? 0) + Number(p.valor));
-  }
-  const receitaPorMes = Array.from(porMes.keys())
-    .sort()
-    .map((chave) => ({ data: tituloMes(chave), valor: Math.round(porMes.get(chave)! * 100) / 100 }));
+  const anoAtual = new Date().getFullYear();
+  const composicao = buildComposicaoFormaPagamento(filtrados);
 
   return (
     <>
-      <FiltroPeriodo periodo={periodo} />
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <FiltroPeriodo periodo={periodo} />
+        <ToggleComparacao periodo={periodo} comparar={comparar} />
+      </div>
 
-      {receitaPorMes.length > 1 && (
+      <Card>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+          {comparar === "ano_anterior" ? `Recebido — ${anoAtual} vs. ${anoAtual - 1}` : "Recebido vs. a receber"}
+        </p>
+        {comparar === "ano_anterior" ? (
+          <DualBarChart
+            data={buildComparacaoAno(pagamentos, anoAtual)}
+            labelA={String(anoAtual)}
+            labelB={String(anoAtual - 1)}
+            colorA="var(--primary)"
+            colorB="var(--muted-2)"
+          />
+        ) : (
+          <DualBarChart
+            data={buildRecebidoVsAReceber(filtrados, alunos)}
+            labelA="Recebido"
+            labelB="A receber"
+            colorA="var(--success)"
+            colorB="var(--warning)"
+          />
+        )}
+      </Card>
+
+      {composicao.length > 0 && (
         <Card>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">Receita mês a mês</p>
-          <SimpleLineChart data={receitaPorMes} tendenciaDelta="maior_melhor" moeda />
+          <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted">Composição por forma de pagamento</p>
+          <DonutChart data={composicao} />
         </Card>
       )}
 
@@ -255,6 +357,24 @@ function AbaAReceber({ alunos }: { alunos: AlunoComPlano[] }) {
 
       <FinanceiroListaSelecionavel alunos={alunos} />
     </>
+  );
+}
+
+function ToggleComparacao({ periodo, comparar }: { periodo: Periodo; comparar: Comparar }) {
+  return (
+    <div className="flex gap-1.5">
+      {COMPARACOES.map((c) => (
+        <Link
+          key={c.valor}
+          href={`/financeiro?aba=recebidos&periodo=${periodo}&comparar=${c.valor}`}
+          className={`shrink-0 rounded-pill border px-3 py-1 text-xs font-medium ${
+            comparar === c.valor ? "border-primary bg-primary-soft text-primary-dark" : "border-border text-muted"
+          }`}
+        >
+          {c.label}
+        </Link>
+      ))}
+    </div>
   );
 }
 
