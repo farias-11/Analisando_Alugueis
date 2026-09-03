@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { Dumbbell } from "lucide-react";
+import { BrandGlyph } from "@/components/brand/glyph";
 
 export default function PrivacidadePage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-10 text-sm leading-relaxed text-foreground">
       <Link href="/" className="mb-6 flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-          <Dumbbell size={16} />
+          <BrandGlyph size={16} />
         </div>
-        <span className="text-sm font-semibold">Trainer Pro</span>
+        <span className="text-sm font-semibold">Duo Flow</span>
       </Link>
 
       <h1 className="mb-1 text-xl font-bold">Política de Privacidade</h1>
@@ -24,7 +24,7 @@ export default function PrivacidadePage() {
         <h2 className="font-semibold">1. Quem trata seus dados</h2>
         <p>
           Seu personal trainer é o controlador dos seus dados — decide para que servem e
-          como são usados. O Trainer Pro é o operador, que trata os dados seguindo as
+          como são usados. O Duo Flow é o operador, que trata os dados seguindo as
           instruções dele.
         </p>
       </section>

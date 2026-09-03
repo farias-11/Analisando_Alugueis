@@ -1,14 +1,14 @@
 import Link from "next/link";
-import { Dumbbell } from "lucide-react";
+import { BrandGlyph } from "@/components/brand/glyph";
 
 export default function TermosPage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-10 text-sm leading-relaxed text-foreground">
       <Link href="/" className="mb-6 flex items-center gap-2">
         <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-white">
-          <Dumbbell size={16} />
+          <BrandGlyph size={16} />
         </div>
-        <span className="text-sm font-semibold">Trainer Pro</span>
+        <span className="text-sm font-semibold">Duo Flow</span>
       </Link>
 
       <h1 className="mb-1 text-xl font-bold">Termos de Uso</h1>
@@ -22,7 +22,7 @@ export default function TermosPage() {
       <section className="mb-6 space-y-2">
         <h2 className="font-semibold">1. Sobre o serviço</h2>
         <p>
-          O Trainer Pro é uma ferramenta de uso privado entre você e seu personal
+          O Duo Flow é uma ferramenta de uso privado entre você e seu personal
           trainer, para acompanhamento de treinos, evolução física e comunicação
           relacionada ao treino. Não processa pagamentos — o controle financeiro exibido
           no app é apenas informativo, combinado diretamente com seu personal.
@@ -61,7 +61,7 @@ export default function TermosPage() {
         <h2 className="font-semibold">5. Responsabilidade</h2>
         <p>
           As orientações de treino, cargas e progressão são de responsabilidade do seu
-          personal trainer. O Trainer Pro é uma ferramenta de registro e comunicação —
+          personal trainer. O Duo Flow é uma ferramenta de registro e comunicação —
           não substitui avaliação profissional.
         </p>
       </section>

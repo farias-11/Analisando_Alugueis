@@ -125,7 +125,7 @@ export function RelatorioAlunoDoc({ data }: { data: RelatorioAlunoData }) {
           ))}
         </View>
 
-        <Text style={styles.rodape}>Relatório gerado automaticamente pelo Trainer Pro.</Text>
+        <Text style={styles.rodape}>Relatório gerado automaticamente pelo Duo Flow.</Text>
       </Page>
     </Document>
   );

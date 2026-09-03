@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { Dumbbell, ChevronLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
+import { BrandGlyph } from "@/components/brand/glyph";
 import { EsqueciSenhaForm } from "./esqueci-senha-form";
 
 export default function EsqueciSenhaPage() {
@@ -8,7 +9,7 @@ export default function EsqueciSenhaPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white">
-            <Dumbbell size={24} />
+            <BrandGlyph size={24} />
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">Esqueci minha senha</h1>

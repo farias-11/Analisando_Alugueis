@@ -37,7 +37,7 @@ export async function GET() {
   return new NextResponse(JSON.stringify(payload, null, 2), {
     headers: {
       "Content-Type": "application/json",
-      "Content-Disposition": `attachment; filename="meus-dados-trainer-pro.json"`,
+      "Content-Disposition": `attachment; filename="meus-dados-duo-flow.json"`,
     },
   });
 }

@@ -1,4 +1,4 @@
-import { Dumbbell } from "lucide-react";
+import { BrandGlyph } from "@/components/brand/glyph";
 import { LoginForm } from "./login-form";
 
 export default function LoginPage() {
@@ -7,10 +7,10 @@ export default function LoginPage() {
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-3 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white">
-            <Dumbbell size={24} />
+            <BrandGlyph size={24} />
           </div>
           <div>
-            <h1 className="text-xl font-bold tracking-tight">TRAINER PRO</h1>
+            <h1 className="text-xl font-bold tracking-tight">DUO FLOW</h1>
             <p className="text-sm text-muted">Painel do personal trainer</p>
           </div>
         </div>

@@ -1,24 +1,26 @@
 @import "tailwindcss";
 
+/* Paleta Duo Flow — hex oficiais da marca (não derivados da imagem da prancha). */
 :root {
-  --background: #f7f5f3;
+  --background: #f7f7f7;
   --surface: #ffffff;
-  --foreground: #1c1917;
-  --muted: #78716c;
-  --muted-2: #a8a29e;
-  --border: #eeece9;
+  --foreground: #1a1a1a;
+  --muted: #666666;
+  --muted-2: #a3a3a3;
+  --border: #eeeeee;
 
-  --primary: #e15726;
-  --primary-dark: #c8461c;
-  --primary-soft: #fdece4;
+  --primary: #f2732a;
+  --primary-dark: #d95a16;
+  --primary-light: #ff8a3d;
+  --primary-soft: #fdeadf;
 
-  --success: #16a34a;
-  --success-soft: #eafaf0;
-  --warning: #d97706;
-  --warning-soft: #fef3e2;
-  --danger: #dc2626;
+  --success: #22c55e;
+  --success-soft: #e8f9ee;
+  --warning: #f59e0b;
+  --warning-soft: #fef3e0;
+  --danger: #ef4444;
   --danger-soft: #fdecec;
-  --neutral-soft: #f1f0ee;
+  --neutral-soft: #f2f2f2;
 }
 
 @theme inline {
@@ -31,6 +33,7 @@
 
   --color-primary: var(--primary);
   --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
   --color-primary-soft: var(--primary-soft);
 
   --color-success: var(--success);

@@ -23,7 +23,7 @@ export function mensagemTicketDor(params: {
 
 export function mensagemConvite(params: { alunoNome: string; personalNome: string; link: string }) {
   const { alunoNome, personalNome, link } = params;
-  return `Oi ${alunoNome.split(" ")[0]}! Aqui é o ${personalNome}. Criei seu acesso ao Trainer Pro pra gente acompanhar seu treino por lá. É só abrir esse link e criar sua senha:\n${link}`;
+  return `Oi ${alunoNome.split(" ")[0]}! Aqui é o ${personalNome}. Criei seu acesso ao Duo Flow pra gente acompanhar seu treino por lá. É só abrir esse link e criar sua senha:\n${link}`;
 }
 
 export function mensagemCobranca(params: { alunoNome: string; valor: number | null; vencimento: string | null }) {

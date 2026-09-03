@@ -70,7 +70,7 @@ export function InstallPromptBanner() {
         {plataforma === "ios" ? <Share size={16} /> : <Download size={16} />}
       </div>
       <div className="flex-1 text-sm">
-        <p className="font-semibold">Instale o Trainer Pro no seu celular</p>
+        <p className="font-semibold">Instale o Duo Flow no seu celular</p>
         {plataforma === "ios" ? (
           <p className="mt-0.5 text-xs">
             Toque em <strong>Compartilhar</strong> e depois em <strong>Adicionar à Tela de Início</strong>.

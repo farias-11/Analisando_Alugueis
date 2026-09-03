@@ -5,9 +5,10 @@ import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import type { NavItem } from "./bottom-nav";
 import { ICON_MAP } from "./icon-map";
-import { Dumbbell, LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { logout } from "@/app/actions/auth";
 import { NotificationBell } from "@/components/notification-bell";
+import { BrandGlyph } from "@/components/brand/glyph";
 
 export function Sidebar({
   items,
@@ -25,10 +26,10 @@ export function Sidebar({
       <div className="flex items-center justify-between gap-2 px-6 pb-6">
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-            <Dumbbell size={18} />
+            <BrandGlyph size={18} />
           </div>
           <div>
-            <p className="text-sm font-semibold leading-tight">Trainer Pro</p>
+            <p className="text-sm font-semibold leading-tight">Duo Flow</p>
             <p className="text-xs text-muted leading-tight">{nome}</p>
           </div>
         </div>

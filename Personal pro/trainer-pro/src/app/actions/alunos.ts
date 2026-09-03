@@ -52,7 +52,7 @@ async function gerarLinkAcesso(
     options: { redirectTo: `${siteUrl}/auth/callback?next=/home` },
   });
   if (erroAcesso || !acesso) {
-    return { erro: "Esse e-mail já tem uma conta no Trainer Pro, mas não consegui gerar o link de acesso. Tente de novo." };
+    return { erro: "Esse e-mail já tem uma conta no Duo Flow, mas não consegui gerar o link de acesso. Tente de novo." };
   }
 
   const authUserId = acesso.user.id;
@@ -63,7 +63,7 @@ async function gerarLinkAcesso(
     .neq("id", alunoId)
     .maybeSingle();
   if (outroAluno) {
-    return { erro: "Esse e-mail já está vinculado a outro aluno no Trainer Pro. Peça pro aluno usar outro e-mail." };
+    return { erro: "Esse e-mail já está vinculado a outro aluno no Duo Flow. Peça pro aluno usar outro e-mail." };
   }
 
   await supabase.from("alunos").update({ auth_user_id: authUserId, status_convite: "aceito" }).eq("id", alunoId);

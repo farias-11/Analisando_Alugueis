@@ -72,7 +72,7 @@ export default async function AjudaPage() {
           <CardTitle className="mb-1">Encontrou um problema no app?</CardTitle>
           <p className="mb-3 text-sm text-muted">
             Isso é diferente do relato de dor — fica registrado só aqui dentro, para quem cuida do
-            Trainer Pro corrigir ou avaliar.
+            Duo Flow corrigir ou avaliar.
           </p>
           <SuporteForm action={abrirTicketSuporteAluno} />
         </Card>

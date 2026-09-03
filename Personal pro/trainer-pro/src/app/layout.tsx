@@ -9,18 +9,18 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Trainer Pro",
-  description: "Gestão de treinos, evolução e pagamentos para personal trainers.",
+  title: "Duo Flow",
+  description: "Conexão que gera evolução — treinos, avaliações e pagamentos entre personal e aluno.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Trainer Pro",
+    title: "Duo Flow",
   },
 };
 
 export const viewport: Viewport = {
-  themeColor: "#e15726",
+  themeColor: "#f2732a",
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,

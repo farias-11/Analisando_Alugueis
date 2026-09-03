@@ -221,7 +221,7 @@ export async function getDashboardData(personalId: string): Promise<DashboardDat
       detalhe: `Sem atualizar medidas há ${dias} dias`,
       diasEmAberto: dias,
       acao: a.whatsapp
-        ? { label: "Chamar", href: buildWhatsappLink(a.whatsapp, `Oi ${a.nome.split(" ")[0]}! Faz um tempo que você não atualiza seus dados no Trainer Pro — tudo certo?`), externo: true }
+        ? { label: "Chamar", href: buildWhatsappLink(a.whatsapp, `Oi ${a.nome.split(" ")[0]}! Faz um tempo que você não atualiza seus dados no Duo Flow — tudo certo?`), externo: true }
         : { label: "Chamar", href: `/alunos/${a.id}?aba=geral` },
     });
   }

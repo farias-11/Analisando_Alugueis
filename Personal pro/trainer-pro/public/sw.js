@@ -1,4 +1,4 @@
-const CACHE_NAME = "trainer-pro-v1";
+const CACHE_NAME = "duo-flow-v1";
 const OFFLINE_URL = "/";
 
 self.addEventListener("install", (event) => {
@@ -61,11 +61,11 @@ self.addEventListener("push", (event) => {
   try {
     payload = event.data.json();
   } catch {
-    payload = { title: "Trainer Pro", body: event.data.text() };
+    payload = { title: "Duo Flow", body: event.data.text() };
   }
 
   event.waitUntil(
-    self.registration.showNotification(payload.title || "Trainer Pro", {
+    self.registration.showNotification(payload.title || "Duo Flow", {
       body: payload.body,
       icon: "/icons/icon-192.png",
       badge: "/icons/icon-192.png",

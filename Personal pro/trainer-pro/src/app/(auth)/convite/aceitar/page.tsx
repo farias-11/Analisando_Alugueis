@@ -1,7 +1,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
-import { Dumbbell } from "lucide-react";
+import { BrandGlyph } from "@/components/brand/glyph";
 import { AceitarConviteForm } from "./aceitar-form";
 import { InstallPromptBanner } from "@/components/install-prompt-banner";
 
@@ -35,7 +35,7 @@ export default async function AceitarConvitePage() {
       <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white">
-            <Dumbbell size={24} />
+            <BrandGlyph size={24} />
           </div>
           <div>
             <h1 className="text-lg font-bold tracking-tight">Você foi convidado!</h1>
@@ -53,7 +53,7 @@ export default async function AceitarConvitePage() {
         </div>
 
         <p className="mb-5 text-center text-sm text-muted">
-          Defina sua senha para acessar o Trainer Pro como aluno do seu personal.
+          Defina sua senha para acessar o Duo Flow como aluno do seu personal.
         </p>
 
         <AceitarConviteForm />

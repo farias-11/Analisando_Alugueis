@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { Dumbbell } from "lucide-react";
+import { BrandGlyph } from "@/components/brand/glyph";
 
 // Os e-mails de convite/recuperação do Supabase usam o template padrão (editar
 // o template exige SMTP customizado, que este projeto não tem configurado).
@@ -53,7 +53,7 @@ export default function AuthCallbackPage() {
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-background px-6 text-center">
       <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary text-white">
-        <Dumbbell size={24} />
+        <BrandGlyph size={24} />
       </div>
       {erro ? (
         <>

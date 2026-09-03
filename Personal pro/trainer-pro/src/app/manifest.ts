@@ -2,13 +2,13 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Trainer Pro",
-    short_name: "Trainer Pro",
-    description: "Gestão de treinos, evolução e pagamentos para personal trainers.",
+    name: "Duo Flow",
+    short_name: "Duo Flow",
+    description: "Conexão que gera evolução — treinos, avaliações e pagamentos entre personal e aluno.",
     start_url: "/",
     display: "standalone",
-    background_color: "#f7f5f3",
-    theme_color: "#e15726",
+    background_color: "#f7f7f7",
+    theme_color: "#f2732a",
     orientation: "portrait",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },

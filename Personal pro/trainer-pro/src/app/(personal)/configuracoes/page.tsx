@@ -118,7 +118,7 @@ export default async function ConfiguracoesPage() {
         <CardTitle className="mb-1">Ajuda e suporte</CardTitle>
         <p className="mb-3 text-sm text-muted">
           Encontrou um erro no app ou tem uma sugestão de melhoria? Fica registrado só aqui dentro,
-          direto pra quem cuida do Trainer Pro.
+          direto pra quem cuida do Duo Flow.
         </p>
         <SuporteForm action={abrirTicketSuportePersonal} />
       </Card>
