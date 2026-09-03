@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import type { Tendencia } from "@/lib/status";
+import { diasDesde, type Tendencia } from "@/lib/status";
 
 export interface ResumoEvolucao {
   pesoDeltaKg: number | null;
@@ -9,6 +9,13 @@ export interface ResumoEvolucao {
   cargaTendencia: Tendencia;
   aderenciaPct: number;
   aderenciaTendencia: Tendencia;
+  /** Dias desde a última execução registrada, de QUALQUER ciclo/aula — null
+   * se nunca treinou. Deliberadamente não depende do ciclo ativo: renovar o
+   * ciclo cria aula_exercicios novos, então a aderência (que só conta sessão
+   * das aulas do ciclo atual) zera na hora — usar aderenciaPct pra detectar
+   * "sumiu" acusaria falso positivo em todo aluno que renovou o ciclo, por
+   * mais que tenha treinado ontem. */
+  diasDesdeUltimoTreino: number | null;
 }
 
 /** Resumo de evolução (topo da Ficha do aluno / Meu progresso): só 2-3 indicadores
@@ -20,29 +27,39 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
 
   // as três consultas abaixo (peso, carga atual, carga anterior) e a busca do
   // ciclo ativo não dependem umas das outras — rodam em paralelo
-  const [{ data: medidas }, { data: execAtual }, { data: execAnterior }, { data: ciclo }] = await Promise.all([
-    supabase
-      .from("medidas")
-      .select("peso, data")
-      .eq("aluno_id", alunoId)
-      .gte("data", trintaDiasAtras)
-      .not("peso", "is", null)
-      .order("data", { ascending: true }),
-    supabase
-      .from("execucoes")
-      .select("carga")
-      .eq("aluno_id", alunoId)
-      .gte("data", trintaDiasAtras)
-      .not("carga", "is", null),
-    supabase
-      .from("execucoes")
-      .select("carga")
-      .eq("aluno_id", alunoId)
-      .gte("data", sessentaDiasAtras)
-      .lt("data", trintaDiasAtras)
-      .not("carga", "is", null),
-    supabase.from("ciclos").select("id, data_inicio").eq("aluno_id", alunoId).eq("ativo", true).maybeSingle(),
-  ]);
+  const [{ data: medidas }, { data: execAtual }, { data: execAnterior }, { data: ciclo }, { data: ultimaExecucao }] =
+    await Promise.all([
+      supabase
+        .from("medidas")
+        .select("peso, data")
+        .eq("aluno_id", alunoId)
+        .gte("data", trintaDiasAtras)
+        .not("peso", "is", null)
+        .order("data", { ascending: true }),
+      supabase
+        .from("execucoes")
+        .select("carga")
+        .eq("aluno_id", alunoId)
+        .gte("data", trintaDiasAtras)
+        .not("carga", "is", null),
+      supabase
+        .from("execucoes")
+        .select("carga")
+        .eq("aluno_id", alunoId)
+        .gte("data", sessentaDiasAtras)
+        .lt("data", trintaDiasAtras)
+        .not("carga", "is", null),
+      supabase.from("ciclos").select("id, data_inicio").eq("aluno_id", alunoId).eq("ativo", true).maybeSingle(),
+      supabase
+        .from("execucoes")
+        .select("data")
+        .eq("aluno_id", alunoId)
+        .order("data", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+    ]);
+
+  const diasDesdeUltimoTreino = ultimaExecucao ? diasDesde(ultimaExecucao.data) : null;
 
   let pesoDeltaKg: number | null = null;
   if (medidas && medidas.length >= 2) {
@@ -107,5 +124,6 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
     cargaTendencia,
     aderenciaPct,
     aderenciaTendencia,
+    diasDesdeUltimoTreino,
   };
 }
