@@ -168,6 +168,9 @@ export default async function HomePage() {
         </div>
       }
     >
+      {/* Em telas largas (md+), próxima aula e meta semanal ficam lado a
+          lado — no celular continuam empilhadas normalmente. */}
+      <div className="flex flex-1 flex-col md:grid md:grid-cols-2 md:items-stretch md:gap-4">
       <Card
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
         className={`relative flex flex-1 flex-col justify-center ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
@@ -250,6 +253,7 @@ export default async function HomePage() {
           </>
         )}
       </Card>
+      </div>
 
       <Card
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
@@ -296,7 +300,14 @@ export default async function HomePage() {
         </div>
       </Card>
 
-      <Card style={{ padding: "var(--pad-card)" }} className="shrink-0 bg-primary-soft">
+      {/* shrink-0 no mobile (fica compacta, o encaixe sem-rolar concentra a
+          sobra nos cards de cima) — no desktop (md+) também cresce, senão
+          fica desproporcional: só "Seu progresso" absorvendo toda a sobra
+          verticial e ficando com um vão estranho dentro dela. */}
+      <Card
+        style={{ padding: "var(--pad-card)" }}
+        className="flex shrink-0 flex-col justify-center bg-primary-soft md:flex-1"
+      >
         <p className="flex items-start gap-2 text-[var(--fs-num)] font-medium leading-snug text-foreground">
           <span>{fechamento.emoji}</span>
           {fechamento.texto}

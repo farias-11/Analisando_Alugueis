@@ -40,12 +40,47 @@ function calcularVariaveis(alturaDisponivel: number): React.CSSProperties {
   return vars as React.CSSProperties;
 }
 
+// Duas situações em que o encaixe "sem rolar" (pensado pra tela de celular
+// em pé) não faz sentido e vira PIOR que rolagem normal:
+// 1) >= md (768px) do Tailwind — mesmo breakpoint em que a BottomNav vira
+//    md:hidden e o Sidebar (desktop) assume a navegação (ver (aluno)/layout.tsx).
+// 2) celular deitado (paisagem) com pouca altura — o chão de CONTEUDO_MIN
+//    (calibrado pensando em altura de tela em pé) não cabe numa tela de
+//    ~375-430px de altura deitada, cortando conteúdo. Nesses dois casos
+//    a página rola normal, como qualquer página comum.
+const MEDIA_FLUXO_NATURAL = "(min-width: 768px), (orientation: landscape) and (max-height: 500px)";
+
 export function ViewportFit({ header, children }: { header?: ReactNode; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   // valor inicial = o piso (nunca estoura no primeiro paint, antes de medir de verdade)
   const [altura, setAltura] = useState(CONTEUDO_MIN);
+  // Sempre começa "false" (igual ao HTML renderizado no servidor, que não
+  // tem window pra checar matchMedia) — senão o primeiro render no cliente
+  // já sai diferente do HTML do servidor e o React descarta tudo com um
+  // erro de hydration mismatch. O valor de verdade só chega depois do
+  // mount, via effect — um re-render a mais aqui é esperado e necessário
+  // pra esse tipo de checagem client-only, não dá pra evitar com
+  // inicializador preguiçoso sem quebrar a hydration.
+  const [desktop, setDesktop] = useState(false);
 
   useEffect(() => {
+    const mq = window.matchMedia(MEDIA_FLUXO_NATURAL);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- de propósito: ver comentário acima do useState(desktop)
+    setDesktop(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setDesktop(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    // No desktop não existe BottomNav fixa pra medir contra (ela some via
+    // md:hidden) e nem precisa desse encaixe sem-rolagem — é só a home de
+    // um app mobile, no PC a página pode rolar normal como qualquer outra.
+    // Sem esse corte cedo, medir() achava a nav "no topo" (getBoundingClientRect
+    // de elemento hidden = tudo zero) e forçava uma altura minúscula,
+    // cortando o conteúdo pela metade.
+    if (desktop) return;
+
     // tentativas > 0 = chamada de reconfirmação (ver abaixo) — evita
     // recursão infinita se por algum motivo nunca convergir.
     function medir(tentativas = 0) {
@@ -100,7 +135,7 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
       window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
     };
-  }, []);
+  }, [desktop]);
 
   // Fonte/padding escalam a partir de ~85% do espaço medido (nunca menos
   // que o piso seguro CONTEUDO_MIN) — isso deixa o texto/espaçamento
@@ -114,6 +149,26 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
   // além de REF_MAX não tinha mais pra onde ir a não ser margem).
   const alturaParaEscala = Math.max(altura * 0.85, CONTEUDO_MIN);
   const vars = calcularVariaveis(alturaParaEscala);
+
+  // Desktop: nada de altura forçada nem overflow-hidden — a página rola
+  // normal, como qualquer página comum (largura máxima e respiro ficam por
+  // conta do <main> do (aluno)/layout.tsx, igual toda outra página do
+  // aluno). Usa o tier MÁXIMO de fonte/padding já calibrado
+  // (calcularVariaveis(REF_MAX), o mesmo de uma tela "grande" no encaixe
+  // mobile), fixo, sem depender de nenhuma medição.
+  if (desktop) {
+    const varsDesktop = calcularVariaveis(REF_MAX);
+    return (
+      // min-h aproxima a altura da viewport (descontando o padding vertical
+      // do <main>, ver (aluno)/layout.tsx) pra que os cards (flex-1, ver
+      // page.tsx) tenham espaço de verdade pra crescer e preencher a tela
+      // em monitores altos, em vez de só ocupar a altura mínima do conteúdo.
+      <div style={{ ...varsDesktop }} className="flex min-h-[calc(100dvh-8rem)] flex-1 flex-col">
+        {header && <div className="mb-6">{header}</div>}
+        <div className="flex flex-1 flex-col">{children}</div>
+      </div>
+    );
+  }
 
   // header (se houver) fica PINADO no topo, com o mesmo pt-3.5/px-4 do sino
   // de notificação (renderizado pelo layout, ver (aluno)/layout.tsx) — assim

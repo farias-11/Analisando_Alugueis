@@ -14,10 +14,12 @@ export function Sidebar({
   items,
   nome,
   notificacoes = 0,
+  notificacoesHref,
 }: {
   items: NavItem[];
   nome: string;
   notificacoes?: number;
+  notificacoesHref?: string;
 }) {
   const pathname = usePathname();
 
@@ -33,7 +35,7 @@ export function Sidebar({
             <p className="text-xs text-muted leading-tight">{nome}</p>
           </div>
         </div>
-        <NotificationBell count={notificacoes} />
+        <NotificationBell count={notificacoes} href={notificacoesHref} />
       </div>
 
       <nav className="flex-1 space-y-0.5 px-3">
