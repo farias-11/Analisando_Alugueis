@@ -12,6 +12,7 @@ import { corTendencia } from "@/lib/status";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { SetaTendencia } from "@/components/evolution-summary";
+import { ViewportFit } from "./viewport-fit";
 import { Check, CheckCircle2 } from "lucide-react";
 
 // legenda abaixo dos círculos da meta semanal — regra simples baseada no
@@ -122,49 +123,14 @@ export default async function HomePage() {
   const pesoAtual = pesoChart.length ? pesoChart[pesoChart.length - 1].valor : null;
   const fechamento = mensagemFechamento(concluidas, meta, resumo);
 
-  // Escala fluida do conteúdo (não só do card): cada variável cresce de forma
-  // linear e contínua entre um celular baixo (667px de altura útil, o piso já
-  // testado sem rolar) e um alto (900px) — abaixo de 667 ou acima de 900 o
-  // clamp() trava no mínimo/máximo. Sem isso, o flex-1 dos cards só empurrava
-  // padding em volta de um conteúdo do mesmo tamanho sempre, ficando com cara
-  // de "sobrando espaço" em vez de preencher de verdade.
-  //
-  // svh, não dvh/vh: no Safari do iPhone, "vh" (e às vezes até "dvh" logo
-  // após o load, antes de qualquer scroll) usa a altura do viewport GRANDE —
-  // como se a barra do navegador já estivesse escondida — mesmo com ela
-  // visível na tela. Isso fazia o cálculo assumir mais espaço do que
-  // realmente tinha disponível e estourava a rolagem justamente no celular
-  // real (não reproduzia no Chromium usado nos testes). "svh" trava sempre
-  // no viewport PEQUENO (o pior caso, barra visível) — garantido, nunca
-  // otimista.
-  const escalaCss = {
-    "--fs-tiny": "clamp(11px, calc(5.27px + 0.858svh), 13px)",
-    "--fs-label": "clamp(14px, calc(5.41px + 1.288svh), 17px)",
-    "--fs-num": "clamp(14px, calc(-0.32px + 2.146svh), 19px)",
-    "--fs-hero": "clamp(18px, calc(-2.04px + 3.004svh), 25px)",
-    "--fs-name": "clamp(20px, calc(-0.04px + 3.004svh), 27px)",
-    "--circle": "clamp(36px, calc(1.64px + 5.15svh), 48px)",
-    "--pad-card": "clamp(16px, calc(-1.18px + 2.575svh), 22px)",
-    "--pad-inner": "clamp(10px, calc(-1.45px + 1.717svh), 14px)",
-    "--gap-card": "clamp(10px, calc(-7.18px + 2.575svh), 16px)",
-  } as React.CSSProperties;
-
   return (
-    // altura fixa = 100svh (viewport pequeno, garantido — ver nota acima)
-    // menos o pb-24 (6rem) que o layout do aluno reserva pra nav inferior
-    // fixa — sem isso a página cresce com o conteúdo e rola. Próxima aula /
-    // Meta semanal / Seu progresso usam flex-1: o card cresce pra preencher
-    // a sobra em celular alto, e o conteúdo cresce junto (ver escalaCss
-    // acima) em vez de só ganhar padding em volta. overflow-hidden é a
-    // garantia final contra rolagem em aparelho pequeno demais. Desconta
-    // ainda env(safe-area-inset-bottom) explicitamente (a faixa de gesto do
-    // iPhone sem botão físico — a nav já reserva isso pra si via .safe-bottom,
-    // mas contar de novo aqui é mais seguro do que confiar que o pb-24 fixo
-    // do layout já é suficiente em todo aparelho) e 10px de folga de segurança.
-    <div
-      style={escalaCss}
-      className="flex h-[calc(100svh-6rem-10px-env(safe-area-inset-bottom,0px))] flex-col overflow-hidden px-4 pb-1.5 pt-3.5"
-    >
+    // ViewportFit mede a altura disponível de verdade em JS (visualViewport
+    // + altura real da nav inferior renderizada) em vez de depender de
+    // unidade de viewport do CSS — vh/dvh/svh se mostraram inconsistentes no
+    // Safari real do iPhone (calculam como se a barra do navegador já
+    // estivesse escondida, mesmo visível). Todo o resto (fonte, círculos,
+    // padding) escala a partir desse mesmo número medido — ver viewport-fit.tsx.
+    <ViewportFit>
       <div className="shrink-0" style={{ marginBottom: "var(--gap-card)" }}>
         <p className="text-[var(--fs-tiny)] text-muted">{saudacao},</p>
         <h1 className="text-[var(--fs-name)] font-bold leading-tight">{primeiroNome}! 👋</h1>
@@ -289,6 +255,6 @@ export default async function HomePage() {
           {fechamento.texto}
         </p>
       </Card>
-    </div>
+    </ViewportFit>
   );
 }
