@@ -77,7 +77,8 @@ export default async function DashboardPage({
   const { radar, radarTotal, ciclosVencendo, destaquesEvolucao, financeiroPeriodo, kpis } = data;
   const primeiroNome = personal.nome.split(" ")[0];
   const horaServidor = new Date().getHours();
-  const saudacao = horaServidor < 12 ? "Bom dia" : horaServidor < 18 ? "Boa tarde" : "Boa noite";
+  // boa noite 18h-00h59, bom dia 01h-11h59, boa tarde 12h-17h59
+  const saudacao = horaServidor >= 18 || horaServidor < 1 ? "Boa noite" : horaServidor < 12 ? "Bom dia" : "Boa tarde";
 
   return (
     <div className="space-y-5 p-4 md:p-0">

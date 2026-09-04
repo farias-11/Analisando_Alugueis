@@ -119,7 +119,8 @@ export default async function HomePage() {
 
   const primeiroNome = aluno.nome.split(" ")[0];
   const horaServidor = new Date().getHours();
-  const saudacao = horaServidor < 12 ? "Bom dia" : horaServidor < 18 ? "Boa tarde" : "Boa noite";
+  // boa noite 18h-00h59, bom dia 01h-11h59, boa tarde 12h-17h59
+  const saudacao = horaServidor >= 18 || horaServidor < 1 ? "Boa noite" : horaServidor < 12 ? "Bom dia" : "Boa tarde";
   const pesoAtual = pesoChart.length ? pesoChart[pesoChart.length - 1].valor : null;
   const fechamento = mensagemFechamento(concluidas, meta, resumo);
 
