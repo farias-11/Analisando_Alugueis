@@ -2,7 +2,7 @@ import { corTendencia, type Tendencia } from "@/lib/status";
 import type { ResumoEvolucao } from "@/lib/data/evolucao";
 import { ArrowDown, ArrowUp, Minus } from "lucide-react";
 
-function SetaTendencia({ tendencia }: { tendencia: Tendencia }) {
+export function SetaTendencia({ tendencia }: { tendencia: Tendencia }) {
   if (tendencia === "positiva") return <ArrowDown size={14} />;
   if (tendencia === "negativa") return <ArrowUp size={14} />;
   return <Minus size={14} />;

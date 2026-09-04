@@ -174,24 +174,41 @@ export async function pedirAtualizacao(formData: FormData) {
 
   const { data: aluno } = await supabase
     .from("alunos")
-    .select("nome, medidas_solicitadas, fotos_solicitadas")
+    .select("nome, medidas_solicitadas, fotos_solicitadas, anamnese_ativa, ultima_atualizacao_medidas")
     .eq("id", alunoId)
     .maybeSingle();
   if (!aluno) return;
 
-  // mensagem reflete só o que foi de fato pedido pra esse aluno — quem só
-  // se pesa não recebe um aviso genérico de "medidas e fotos"
+  let anamnesePendente = false;
+  if (aluno.anamnese_ativa) {
+    const { data: anamnese } = await supabase
+      .from("anamneses")
+      .select("concluida")
+      .eq("aluno_id", alunoId)
+      .maybeSingle();
+    anamnesePendente = !anamnese?.concluida;
+  }
+
+  // mensagem reflete só o que faz sentido pra esse aluno específico — quem
+  // só se pesa não recebe um aviso genérico de "medidas e fotos", e quem já
+  // preencheu a anamnese não recebe pedido pra preencher de novo. Sem link
+  // pra baixar o app (não é uma página própria) — vira só uma linha a mais
+  // na mensagem, sempre incluída como lembrete leve.
   const partes = ["peso"];
   if ((aluno.medidas_solicitadas as string[]).length > 0) partes.push("medidas");
   if ((aluno.fotos_solicitadas as string[]).length > 0) partes.push("fotos");
   const listaCampos =
     partes.length === 1 ? partes[0] : `${partes.slice(0, -1).join(", ")} e ${partes[partes.length - 1]}`;
 
+  const pedidos = [`atualize ${listaCampos}`];
+  if (anamnesePendente) pedidos.push("preencha sua anamnese");
+  const mensagem = `Seu personal pediu que você ${pedidos.join(" e ")}. Aproveite e instale o app no seu celular se ainda não instalou.`;
+
   await notificarAluno(alunoId, {
     tipo: "pedido_atualizacao",
     titulo: "Hora de atualizar seus dados",
-    mensagem: `Seu personal pediu que você atualize ${listaCampos}.`,
-    link: "/medidas",
+    mensagem,
+    link: anamnesePendente ? "/anamnese" : "/medidas",
   });
 
   await supabase

@@ -7,30 +7,47 @@ import {
   aulaConcluidaHoje,
 } from "@/lib/data/aluno";
 import { getResumoEvolucao } from "@/lib/data/evolucao";
-import { createClient } from "@/lib/supabase/server";
-import { diasDesde } from "@/lib/status";
-import { Card, CardSubtitle, CardTitle } from "@/components/ui/card";
+import { getGraficoPeso } from "@/lib/data/graficos";
+import { corTendencia } from "@/lib/status";
+import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
-import { EvolutionSummary } from "@/components/evolution-summary";
-import { InsightEvolucaoCard } from "@/components/insight-evolucao-card";
-import { gerarInsightEvolucao } from "@/lib/insight-evolucao";
-import { InstallPromptBanner } from "@/components/install-prompt-banner";
-import { AlertTriangle, CheckCircle2, ChevronRight, Flame } from "lucide-react";
-import Link from "next/link";
+import { SetaTendencia } from "@/components/evolution-summary";
+import { Check, CheckCircle2 } from "lucide-react";
+
+// legenda abaixo dos círculos da meta semanal — regra simples baseada no
+// progresso real da semana, sem IA (handoff da Home do aluno, seção 2.3)
+function legendaMetaSemanal(concluidas: number, meta: number): string {
+  if (meta <= 0) return "";
+  if (concluidas >= meta) return "Meta da semana concluída! 🎉";
+  if (concluidas === 0) return "Bora começar a semana!";
+  if (concluidas / meta >= 0.6) return "Você está no caminho!";
+  return "Ainda dá tempo de bater a meta.";
+}
+
+// mesma régua da meta semanal alimenta o card de fechamento — só troca a
+// prioridade quando faz tempo que o aluno não treina de verdade (handoff 2.5)
+function mensagemFechamento(concluidas: number, meta: number, diasDesdeUltimoTreino: number | null): string {
+  if (meta > 0 && concluidas >= meta) return "Você completou sua semana de treinos. Continue assim! 💪";
+  if (diasDesdeUltimoTreino !== null && diasDesdeUltimoTreino >= 7) return "Faz um tempo que você não treina — que tal hoje?";
+  return "Você está evoluindo! Continue assim.";
+}
+
+function qualificarAderencia(pct: number): string {
+  if (pct >= 80) return "ótimo";
+  if (pct >= 50) return "bom";
+  return "atenção";
+}
 
 export default async function HomePage() {
   const { aluno } = await requireAluno();
-  const supabase = await createClient();
 
-  // ciclo ativo roda em paralelo com resumo/anamnese (não dependem dele);
-  // aulas só dá pra buscar depois de saber o ciclo. aulaHoje e aderência da
-  // semana usam as MESMAS aulas (uma query só, não duas) e rodam juntas.
-  const [ciclo, resumo, anamnese] = await Promise.all([
+  // ciclo ativo roda em paralelo com resumo/peso (não dependem dele); aulas
+  // só dá pra buscar depois de saber o ciclo. aulaHoje e aderência da semana
+  // usam as MESMAS aulas (uma query só, não duas) e rodam juntas.
+  const [ciclo, resumo, pesoChart] = await Promise.all([
     getCicloAtivo(aluno.id),
     getResumoEvolucao(aluno.id),
-    aluno.anamnese_ativa
-      ? supabase.from("anamneses").select("concluida").eq("aluno_id", aluno.id).maybeSingle()
-      : Promise.resolve(null),
+    getGraficoPeso(aluno.id),
   ]);
   const aulas = ciclo ? await getAulasDoCiclo(ciclo.id) : [];
   const [aulaHoje, { concluidas, meta }] = await Promise.all([
@@ -39,29 +56,27 @@ export default async function HomePage() {
   ]);
   const jaFezHoje = aulaHoje ? await aulaConcluidaHoje(aluno.id, aulaHoje.id) : false;
 
-  const pendencias: { texto: string; href: string }[] = [];
-  const diasSemMedidas = diasDesde(aluno.ultima_atualizacao_medidas);
-  if (diasSemMedidas === null || diasSemMedidas > 14) {
-    pendencias.push({ texto: "Insira suas medidas", href: "/medidas" });
-  }
-  if (aluno.anamnese_ativa && !anamnese?.data?.concluida) {
-    pendencias.push({ texto: "Preencha sua anamnese", href: "/anamnese" });
-  }
-
   const primeiroNome = aluno.nome.split(" ")[0];
-  const metaPct = meta > 0 ? Math.round((concluidas / meta) * 100) : 0;
-  const insight = gerarInsightEvolucao(resumo, { semana: { concluidas, meta } });
+  const horaServidor = new Date().getHours();
+  const saudacao = horaServidor < 12 ? "Bom dia" : horaServidor < 18 ? "Boa tarde" : "Boa noite";
+  const pesoAtual = pesoChart.length ? pesoChart[pesoChart.length - 1].valor : null;
 
   return (
-    <div className="space-y-5 px-4 pb-4 pt-6">
-      <div>
-        <p className="text-sm text-muted">Olá,</p>
-        <h1 className="text-2xl font-bold">{primeiroNome}!</h1>
+    // altura fixa = 100dvh menos o pb-24 (6rem) que o layout do aluno reserva
+    // pra nav inferior fixa — sem isso a página cresce com o conteúdo e rola.
+    // Próxima aula / Meta semanal / Seu progresso usam flex-1 com o conteúdo
+    // centralizado: em celular alto sobra altura, e ela vira respiro dentro
+    // desses 3 cards (em vez de um vão em branco no fim da tela). overflow-
+    // hidden é a garantia final contra rolagem em aparelho pequeno demais.
+    <div className="flex h-[calc(100dvh-6rem)] flex-col gap-2.5 overflow-hidden px-4 pb-1.5 pt-3.5">
+      <div className="shrink-0">
+        <p className="text-xs text-muted">{saudacao},</p>
+        <h1 className="text-xl font-bold leading-tight">{primeiroNome}! 👋</h1>
       </div>
 
-      <InstallPromptBanner />
-
-      <Card className={jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}>
+      <Card
+        className={`flex flex-1 flex-col justify-center p-4 ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
+      >
         {aulaHoje && jaFezHoje ? (
           <>
             <p className="flex items-center gap-1.5 text-xs font-medium text-white/80">
@@ -70,8 +85,9 @@ export default async function HomePage() {
             <p className="mt-1 text-lg font-bold">{aulaHoje.nome} concluído! 🎉</p>
             <ButtonLink
               href={`/treino/${aulaHoje.id}`}
+              size="sm"
               variant="secondary"
-              className="mt-4 w-full bg-white text-success hover:bg-white/90"
+              className="mt-3 w-full bg-white text-success hover:bg-white/90"
             >
               Rever treino
             </ButtonLink>
@@ -85,8 +101,9 @@ export default async function HomePage() {
             ) : null}
             <ButtonLink
               href={`/treino`}
+              size="sm"
               variant="secondary"
-              className="mt-4 w-full bg-white text-primary-dark hover:bg-white/90"
+              className="mt-3 w-full bg-white text-primary-dark hover:bg-white/90"
             >
               Começar treino
             </ButtonLink>
@@ -94,62 +111,77 @@ export default async function HomePage() {
         ) : ciclo ? (
           <>
             <p className="text-xs font-medium text-white/80">Próxima aula</p>
-            <p className="mt-2 text-sm text-white/90">Hoje é dia de descanso. 💪</p>
+            <p className="mt-1.5 text-sm text-white/90">Hoje é dia de descanso. 💪</p>
           </>
         ) : (
           <>
             <p className="text-xs font-medium text-white/80">Próxima aula</p>
-            <p className="mt-2 text-sm text-white/90">
+            <p className="mt-1.5 text-sm text-white/90">
               Nenhum treino ativo no momento. Fale com seu personal.
             </p>
           </>
         )}
       </Card>
 
-      {pendencias.length > 0 && (
-        <div className="space-y-2">
-          {pendencias.map((p) => (
-            <Link
-              key={p.href}
-              href={p.href}
-              prefetch={false}
-              className="flex items-center justify-between rounded-xl border border-warning/30 bg-warning-soft px-3.5 py-3 text-sm font-medium text-warning"
-            >
-              <span className="flex items-center gap-2">
-                <AlertTriangle size={16} />
-                {p.texto}
-              </span>
-              <ChevronRight size={16} />
-            </Link>
-          ))}
-        </div>
-      )}
-
-      <Card>
+      <Card className="flex flex-1 flex-col justify-center p-4">
         <div className="flex items-center justify-between">
-          <div>
-            <CardTitle>Meta semanal</CardTitle>
-            <CardSubtitle>
-              {concluidas} de {meta || "—"} treinos
-            </CardSubtitle>
-          </div>
-          <div className="flex items-center gap-1 text-primary">
-            <Flame size={16} />
-            <span className="text-sm font-bold">{metaPct}%</span>
-          </div>
+          <CardTitle>Meta semanal</CardTitle>
+          <span className="text-xs font-semibold text-muted">
+            {concluidas} de {meta || "—"} treinos
+          </span>
         </div>
-        <div className="mt-3 h-2 w-full overflow-hidden rounded-pill bg-neutral-soft">
-          <div
-            className="h-full rounded-pill bg-primary transition-all"
-            style={{ width: `${Math.min(metaPct, 100)}%` }}
-          />
+        {meta > 0 && (
+          <>
+            <div className="mt-3 flex gap-2">
+              {Array.from({ length: meta }, (_, i) => i < concluidas).map((feito, i) => (
+                <div
+                  key={i}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                    feito ? "bg-primary text-white" : "border-2 border-border text-border"
+                  }`}
+                >
+                  {feito && <Check size={16} strokeWidth={3} />}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2.5 text-xs text-muted">{legendaMetaSemanal(concluidas, meta)}</p>
+          </>
+        )}
+      </Card>
+
+      <Card className="flex flex-1 flex-col justify-center p-4">
+        <CardTitle className="mb-2.5">Seu progresso</CardTitle>
+        <div className="grid grid-cols-3 gap-2">
+          <div className="rounded-xl bg-neutral-soft p-2.5 text-center">
+            <p className="text-[11px] text-muted">Peso</p>
+            <p className="text-sm font-bold">{pesoAtual !== null ? `${pesoAtual}kg` : "—"}</p>
+            {resumo.pesoDeltaKg !== null && (
+              <p className={`flex items-center justify-center gap-0.5 text-[11px] ${corTendencia(resumo.pesoTendencia).text}`}>
+                <SetaTendencia tendencia={resumo.pesoTendencia} />
+                {Math.abs(resumo.pesoDeltaKg).toFixed(1)}kg
+              </p>
+            )}
+          </div>
+          <div className="rounded-xl bg-neutral-soft p-2.5 text-center">
+            <p className="text-[11px] text-muted">Carga média</p>
+            <p className="text-sm font-bold">
+              {resumo.cargaDeltaPct === null ? "—" : `${resumo.cargaDeltaPct > 0 ? "+" : ""}${resumo.cargaDeltaPct.toFixed(0)}%`}
+            </p>
+            <p className="text-[11px] text-muted">30d</p>
+          </div>
+          <div className="rounded-xl bg-neutral-soft p-2.5 text-center">
+            <p className="text-[11px] text-muted">Aderência</p>
+            <p className="text-sm font-bold">{resumo.aderenciaPct}%</p>
+            <p className="text-[11px] text-muted">{qualificarAderencia(resumo.aderenciaPct)}</p>
+          </div>
         </div>
       </Card>
 
-      <Card>
-        <CardTitle className="mb-3">Seu progresso</CardTitle>
-        <EvolutionSummary resumo={resumo} />
-        <InsightEvolucaoCard insight={insight} />
+      <Card className="shrink-0 bg-primary-soft p-3">
+        <p className="flex items-start gap-2 text-xs font-medium leading-snug text-foreground">
+          <span>🔥</span>
+          {mensagemFechamento(concluidas, meta, resumo.diasDesdeUltimoTreino)}
+        </p>
       </Card>
     </div>
   );
