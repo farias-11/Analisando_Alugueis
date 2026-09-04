@@ -169,11 +169,15 @@ export default async function HomePage() {
       }
     >
       {/* Em telas largas (md+), próxima aula e meta semanal ficam lado a
-          lado — no celular continuam empilhadas normalmente. */}
-      <div className="flex flex-1 flex-col md:grid md:grid-cols-2 md:items-stretch md:gap-4">
+          lado — no celular continuam empilhadas normalmente. Nenhum card
+          "estica" pra preencher sobra (isso já causou card gigante com
+          conteúdo minúsculo dentro, em mais de uma rodada) — todos ficam no
+          tamanho natural, igual a referência de design; a sobra vira uma
+          margem pequena e centralizada (ver justify-center no ViewportFit). */}
+      <div className="flex flex-col md:grid md:grid-cols-2 md:items-stretch md:gap-4">
       <Card
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
-        className={`relative flex flex-1 flex-col justify-center ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
+        className={`relative flex shrink-0 flex-col justify-center md:flex-1 ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
       >
         <Dumbbell size={22} strokeWidth={1.75} className="absolute right-4 top-4 text-white/35" />
         {aulaHoje && jaFezHoje ? (
@@ -224,12 +228,6 @@ export default async function HomePage() {
         )}
       </Card>
 
-      {/* shrink-0 no mobile, mesma razão do "Seu progresso" logo abaixo:
-          menos conteúdo natural que a "Próxima aula" ao lado, então dividir
-          a sobra em partes iguais entre os dois inflava só esse aqui
-          (círculos boiando com um vão enorme ao redor). Só a "Próxima aula"
-          (flex-1) absorve a sobra no mobile — ela tem conteúdo (texto +
-          botão) suficiente pra crescer sem ficar esquisita. */}
       <Card
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
         className="flex shrink-0 flex-col justify-center md:flex-1"
@@ -261,11 +259,6 @@ export default async function HomePage() {
       </Card>
       </div>
 
-      {/* shrink-0 no mobile — mesmo motivo do card de fechamento (ver
-          comentário abaixo): "Seu progresso" tem bem menos conteúdo natural
-          que o bloco de cima (aula + meta semanal), então dividir a sobra
-          em partes IGUAIS entre os dois inflava esse card desproporcionalmente
-          (card gigante, conteúdo minúsculo lá dentro). Cresce só no desktop. */}
       <Card
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
         className="flex shrink-0 flex-col justify-center md:flex-1"
@@ -311,10 +304,6 @@ export default async function HomePage() {
         </div>
       </Card>
 
-      {/* shrink-0 no mobile (fica compacta, o encaixe sem-rolar concentra a
-          sobra nos cards de cima) — no desktop (md+) também cresce, senão
-          fica desproporcional: só "Seu progresso" absorvendo toda a sobra
-          verticial e ficando com um vão estranho dentro dela. */}
       <Card
         style={{ padding: "var(--pad-card)" }}
         className="flex shrink-0 flex-col justify-center bg-primary-soft md:flex-1"
