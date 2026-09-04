@@ -19,16 +19,21 @@ const CONTEUDO_MIN = 571; // piso testado sem rolar (tela de 667px)
 const REF_MIN = CONTEUDO_MIN;
 const REF_MAX = 804; // tela de 900px — a partir daqui a escala trava no máximo
 
+// Tiers MÁXIMOS bem mais generosos que antes — em telas altas, sem nenhum
+// card esticando sozinho (page.tsx, todos shrink-0), é ISSO que precisa
+// preencher o espaço: tudo (fonte, padding, círculo, respiro entre cards)
+// visivelmente maior, não só um pouquinho. Testado até altura medida
+// ~835px (tela de ~930px) sem sobrar vão vazio em cima/embaixo.
 const TAMANHOS = {
-  "--fs-tiny": [11, 13],
-  "--fs-label": [14, 17],
-  "--fs-num": [14, 19],
-  "--fs-hero": [18, 25],
-  "--fs-name": [20, 27],
-  "--circle": [36, 48],
-  "--pad-card": [9, 22],
-  "--pad-inner": [7, 14],
-  "--gap-card": [6, 16],
+  "--fs-tiny": [11, 14],
+  "--fs-label": [14, 19],
+  "--fs-num": [14, 22],
+  "--fs-hero": [18, 29],
+  "--fs-name": [20, 32],
+  "--circle": [36, 58],
+  "--pad-card": [9, 34],
+  "--pad-inner": [7, 20],
+  "--gap-card": [6, 26],
 } as const;
 
 function calcularVariaveis(alturaDisponivel: number): React.CSSProperties {
@@ -137,16 +142,18 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
     };
   }, [desktop]);
 
-  // Fonte/padding escalam a partir de ~85% do espaço medido (nunca menos
-  // que o piso seguro CONTEUDO_MIN) — isso deixa o texto/espaçamento
-  // naturalmente um pouco mais respirado quando sobra espaço. NENHUM card
-  // estica pra preencher a sobra (ver page.tsx — todos são shrink-0): já
-  // testado que isso vira "card gigante, conteúdo minúsculo" em telas com
-  // bastante espaço sobrando, porque a sobra nunca se distribui de forma
-  // proporcional ao conteúdo de cada card. Em vez disso, o bloco inteiro
-  // (tamanho natural) fica CENTRALIZADO no espaço disponível — a sobra vira
-  // uma margem pequena e simétrica em cima/embaixo, nunca dentro de um card.
-  const alturaParaEscala = Math.max(altura * 0.85, CONTEUDO_MIN);
+  // Fonte/padding escalam quase até 100% do espaço medido (nunca menos que
+  // o piso seguro CONTEUDO_MIN) — é assim que a tela "preenche": tudo cresce
+  // JUNTO e proporcionalmente (texto, círculos, respiro dos cards), não um
+  // card específico. NENHUM card estica sozinho pra preencher sobra (ver
+  // page.tsx — todos são shrink-0): já testado que isso vira "card gigante,
+  // conteúdo minúsculo" em telas com espaço sobrando, porque a sobra nunca
+  // se distribui de forma proporcional ao conteúdo de cada card. E também
+  // já testado que reservar uma fatia fixa (~15%) da tela pra escala de
+  // fonte deixa sobra demais como margem vazia em cima/embaixo em telas
+  // altas — por isso quase 100%, não 85%. O bloco inteiro fica centralizado
+  // no espaço disponível; o que sobrar (pouco, agora) vira margem simétrica.
+  const alturaParaEscala = Math.max(altura * 0.98, CONTEUDO_MIN);
   const vars = calcularVariaveis(alturaParaEscala);
 
   // Desktop: nada de altura forçada nem overflow-hidden — a página rola
