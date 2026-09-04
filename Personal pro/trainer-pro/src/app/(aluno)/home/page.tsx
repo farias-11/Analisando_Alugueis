@@ -223,28 +223,34 @@ export default async function HomePage() {
         <CardTitle className="mb-2.5 text-[var(--fs-label)]">Seu progresso</CardTitle>
         <div className="grid grid-cols-3 gap-2">
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
-            <p className="text-[var(--fs-tiny)] text-muted">Peso</p>
+            <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Peso</p>
             <p className="text-[var(--fs-num)] font-bold">{pesoAtual !== null ? `${pesoAtual}kg` : "—"}</p>
-            {resumo.pesoDeltaKg !== null && (
-              <p
-                className={`flex items-center justify-center gap-0.5 text-[var(--fs-tiny)] ${corTendencia(resumo.pesoTendencia).text}`}
-              >
-                <SetaTendencia tendencia={resumo.pesoTendencia} />
-                {Math.abs(resumo.pesoDeltaKg).toFixed(1)}kg
-              </p>
-            )}
+            <p
+              className={`flex items-center justify-center gap-0.5 whitespace-nowrap text-[var(--fs-tiny)] ${
+                resumo.pesoDeltaKg !== null ? corTendencia(resumo.pesoTendencia).text : "text-muted"
+              }`}
+            >
+              {resumo.pesoDeltaKg !== null ? (
+                <>
+                  <SetaTendencia tendencia={resumo.pesoTendencia} />
+                  {Math.abs(resumo.pesoDeltaKg).toFixed(1)}kg
+                </>
+              ) : (
+                "30d"
+              )}
+            </p>
           </div>
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
-            <p className="text-[var(--fs-tiny)] text-muted">Carga média</p>
+            <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Carga</p>
             <p className="text-[var(--fs-num)] font-bold">
               {resumo.cargaDeltaPct === null ? "—" : `${resumo.cargaDeltaPct > 0 ? "+" : ""}${resumo.cargaDeltaPct.toFixed(0)}%`}
             </p>
-            <p className="text-[var(--fs-tiny)] text-muted">30d</p>
+            <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">30d</p>
           </div>
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
-            <p className="text-[var(--fs-tiny)] text-muted">Aderência</p>
+            <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Aderência</p>
             <p className="text-[var(--fs-num)] font-bold">{resumo.aderenciaPct}%</p>
-            <p className="text-[var(--fs-tiny)] text-muted">{qualificarAderencia(resumo.aderenciaPct)}</p>
+            <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">{qualificarAderencia(resumo.aderenciaPct)}</p>
           </div>
         </div>
       </Card>
