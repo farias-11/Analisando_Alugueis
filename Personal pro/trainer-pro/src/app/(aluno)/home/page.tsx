@@ -26,26 +26,48 @@ function legendaMetaSemanal(concluidas: number, meta: number): string {
 
 // Card de fechamento: uma frase por situação real do aluno, não uma genérica
 // fixa — usa só o que o resumo de evolução já calcula (nada de dado novo).
-// Ordem é prioridade: casos mais específicos/acionáveis primeiro, cai pro
-// genérico só quando nada de notável está acontecendo. Reaproveita os mesmos
-// limiares já usados em cargaTendencia/aderenciaTendencia (evolucao.ts) em
-// vez de inventar números novos, pra não ter dois critérios divergentes pro
-// mesmo dado.
+// 15 ramos, do mais específico/urgente pro genérico, agrupados em 4 blocos:
+// recência de treino → meta da semana → tendência de desempenho → genérico.
+// Primeiro que bater, ganha (ordem importa). Reaproveita os mesmos limiares
+// já usados em cargaTendencia/pesoTendencia/aderenciaTendencia (evolucao.ts)
+// em vez de inventar número novo, pra não ter dois critérios divergentes
+// pro mesmo dado.
 function mensagemFechamento(
   concluidas: number,
   meta: number,
   resumo: ResumoEvolucao
 ): { emoji: string; texto: string } {
-  const { diasDesdeUltimoTreino, cargaTendencia, aderenciaTendencia } = resumo;
+  const { diasDesdeUltimoTreino: dias, cargaTendencia, pesoTendencia, aderenciaTendencia, aderenciaPct } = resumo;
+  const bateuMeta = meta > 0 && concluidas >= meta;
 
-  if (diasDesdeUltimoTreino === null) {
+  // --- recência (mais urgente: há quanto tempo o aluno treinou de verdade) ---
+  if (dias === null) {
     return { emoji: "🚀", texto: "Ainda não vimos seu primeiro treino por aqui — bora começar?" };
   }
-  if (diasDesdeUltimoTreino >= 7) {
+  if (dias >= 14) {
+    return { emoji: "📵", texto: "Faz muito tempo que você não aparece — está tudo bem?" };
+  }
+  if (dias >= 7) {
     return { emoji: "😴", texto: "Faz tempo que você não treina — que tal hoje?" };
   }
-  if (meta > 0 && concluidas >= meta) {
+  if (dias >= 3) {
+    return { emoji: "👋", texto: "Já faz uns dias desde o último treino — bora voltar?" };
+  }
+
+  // --- meta da semana (conquista concreta) ---
+  if (dias === 0 && bateuMeta) {
+    return { emoji: "🏆", texto: "Treino de hoje feito e meta batida — semana perfeita!" };
+  }
+  if (bateuMeta) {
     return { emoji: "💪", texto: "Você completou sua semana de treinos. Continue assim!" };
+  }
+  if (meta > 0 && concluidas === meta - 1) {
+    return { emoji: "🎯", texto: "Só falta 1 treino pra fechar a semana com a meta batida!" };
+  }
+
+  // --- tendência de desempenho (carga, peso, aderência) ---
+  if (aderenciaPct >= 90) {
+    return { emoji: "⭐", texto: "Sua aderência está impecável — poucos chegam nesse nível!" };
   }
   if (cargaTendencia === "positiva") {
     return { emoji: "🔥", texto: "Sua carga está subindo — o esforço está valendo a pena!" };
@@ -53,8 +75,19 @@ function mensagemFechamento(
   if (cargaTendencia === "negativa") {
     return { emoji: "📉", texto: "Sua carga caiu um pouco — vale ajustar o descanso." };
   }
+  if (pesoTendencia === "positiva") {
+    return { emoji: "⚖️", texto: "Seu peso está indo na direção certa — continue assim." };
+  }
+  if (pesoTendencia === "negativa") {
+    return { emoji: "🧭", texto: "Seu peso subiu essa semana — o foco é constância, não perfeição." };
+  }
   if (aderenciaTendencia === "negativa") {
     return { emoji: "⏳", texto: "Essa semana ainda não decolou — dá pra recuperar o ritmo." };
+  }
+
+  // --- genérico ---
+  if (meta > 0 && concluidas > 0) {
+    return { emoji: "📈", texto: "Bom ritmo até aqui essa semana, continue assim!" };
   }
   return { emoji: "👍", texto: "Você está evoluindo! Continue assim." };
 }
