@@ -102,21 +102,24 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
     };
   }, []);
 
-  // Sobra pequena e centralizada: a escala de fonte/padding mira só ~85%
-  // do espaço medido (nunca menos que o piso seguro CONTEUDO_MIN) — isso
-  // deixa o conteúdo naturalmente um pouco menor que o espaço todo. O bloco
-  // em si NÃO tem altura forçada (fica "auto", do tamanho que o conteúdo
-  // pede de verdade); é o outer com justify-center que centraliza essa
-  // sobra em cima e embaixo. Importante: nunca encolhe o conteúdo abaixo do
-  // que ele precisa pra não rolar — só o que sobra além disso vira margem.
+  // Fonte/padding escalam a partir de ~85% do espaço medido (nunca menos
+  // que o piso seguro CONTEUDO_MIN) — isso deixa o texto/espaçamento
+  // naturalmente um pouco mais respirado quando sobra espaço, mas sem
+  // depender de virar margem em branco: o bloco de baixo é "flex-1" de
+  // verdade (estica pra preencher o que sobrou), e os cards ali dentro
+  // (também flex-1, ver page.tsx) crescem pra usar essa sobra — não vira
+  // espaço vazio entre o header e o card de próxima aula, nem entre o
+  // último card e a nav. Antes disso usava justify-center num bloco
+  // auto-altura, o que virava um vão enorme em telas mais altas (a sobra
+  // além de REF_MAX não tinha mais pra onde ir a não ser margem).
   const alturaParaEscala = Math.max(altura * 0.85, CONTEUDO_MIN);
   const vars = calcularVariaveis(alturaParaEscala);
 
   // header (se houver) fica PINADO no topo, com o mesmo pt-3.5/px-4 do sino
   // de notificação (renderizado pelo layout, ver (aluno)/layout.tsx) — assim
   // as duas coisas ficam sempre na mesma altura, independente de quanta
-  // sobra existe. O resto do conteúdo continua centralizado no espaço que
-  // sobra abaixo do header.
+  // sobra existe. O resto do conteúdo preenche o espaço que sobra abaixo
+  // do header (ver comentário acima).
   return (
     <div ref={ref} style={{ height: `${altura}px` }} className="flex flex-col overflow-hidden">
       {header && (
@@ -124,8 +127,8 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
           {header}
         </div>
       )}
-      <div className="flex flex-1 flex-col justify-center overflow-hidden">
-        <div style={{ ...vars }} className="flex flex-col px-4">
+      <div className="flex flex-1 flex-col overflow-hidden">
+        <div style={{ ...vars, paddingBottom: "var(--gap-card)" }} className="flex flex-1 flex-col px-4">
           {children}
         </div>
       </div>
