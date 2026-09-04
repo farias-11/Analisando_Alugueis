@@ -224,9 +224,15 @@ export default async function HomePage() {
         )}
       </Card>
 
+      {/* shrink-0 no mobile, mesma razão do "Seu progresso" logo abaixo:
+          menos conteúdo natural que a "Próxima aula" ao lado, então dividir
+          a sobra em partes iguais entre os dois inflava só esse aqui
+          (círculos boiando com um vão enorme ao redor). Só a "Próxima aula"
+          (flex-1) absorve a sobra no mobile — ela tem conteúdo (texto +
+          botão) suficiente pra crescer sem ficar esquisita. */}
       <Card
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
-        className="flex flex-1 flex-col justify-center"
+        className="flex shrink-0 flex-col justify-center md:flex-1"
       >
         <div className="flex items-center justify-between">
           <CardTitle className="text-[var(--fs-label)]">Meta semanal</CardTitle>
