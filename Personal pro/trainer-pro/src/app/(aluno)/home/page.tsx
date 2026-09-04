@@ -255,9 +255,14 @@ export default async function HomePage() {
       </Card>
       </div>
 
+      {/* shrink-0 no mobile — mesmo motivo do card de fechamento (ver
+          comentário abaixo): "Seu progresso" tem bem menos conteúdo natural
+          que o bloco de cima (aula + meta semanal), então dividir a sobra
+          em partes IGUAIS entre os dois inflava esse card desproporcionalmente
+          (card gigante, conteúdo minúsculo lá dentro). Cresce só no desktop. */}
       <Card
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
-        className="flex flex-1 flex-col justify-center"
+        className="flex shrink-0 flex-col justify-center md:flex-1"
       >
         <CardTitle className="mb-2 text-[var(--fs-label)]">Seu progresso</CardTitle>
         <div className="grid grid-cols-3 gap-2">
