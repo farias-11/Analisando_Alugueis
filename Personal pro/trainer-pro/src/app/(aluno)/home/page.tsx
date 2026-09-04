@@ -122,28 +122,50 @@ export default async function HomePage() {
   const pesoAtual = pesoChart.length ? pesoChart[pesoChart.length - 1].valor : null;
   const fechamento = mensagemFechamento(concluidas, meta, resumo);
 
+  // Escala fluida do conteúdo (não só do card): cada variável cresce de forma
+  // linear e contínua entre um celular baixo (667px de altura útil, o piso já
+  // testado sem rolar) e um alto (900px) — abaixo de 667 ou acima de 900 o
+  // clamp() trava no mínimo/máximo. Sem isso, o flex-1 dos cards só empurrava
+  // padding em volta de um conteúdo do mesmo tamanho sempre, ficando com cara
+  // de "sobrando espaço" em vez de preencher de verdade.
+  const escalaCss = {
+    "--fs-tiny": "clamp(11px, calc(5.27px + 0.858vh), 13px)",
+    "--fs-label": "clamp(14px, calc(5.41px + 1.288vh), 17px)",
+    "--fs-num": "clamp(14px, calc(-0.32px + 2.146vh), 19px)",
+    "--fs-hero": "clamp(18px, calc(-2.04px + 3.004vh), 25px)",
+    "--fs-name": "clamp(20px, calc(-0.04px + 3.004vh), 27px)",
+    "--circle": "clamp(36px, calc(1.64px + 5.15vh), 48px)",
+    "--pad-card": "clamp(16px, calc(-1.18px + 2.575vh), 22px)",
+    "--pad-inner": "clamp(10px, calc(-1.45px + 1.717vh), 14px)",
+    "--gap-card": "clamp(10px, calc(-7.18px + 2.575vh), 16px)",
+  } as React.CSSProperties;
+
   return (
     // altura fixa = 100dvh menos o pb-24 (6rem) que o layout do aluno reserva
     // pra nav inferior fixa — sem isso a página cresce com o conteúdo e rola.
-    // Próxima aula / Meta semanal / Seu progresso usam flex-1 com o conteúdo
-    // centralizado: em celular alto sobra altura, e ela vira respiro dentro
-    // desses 3 cards (em vez de um vão em branco no fim da tela). overflow-
-    // hidden é a garantia final contra rolagem em aparelho pequeno demais.
-    <div className="flex h-[calc(100dvh-6rem)] flex-col gap-2.5 overflow-hidden px-4 pb-1.5 pt-3.5">
-      <div className="shrink-0">
-        <p className="text-xs text-muted">{saudacao},</p>
-        <h1 className="text-xl font-bold leading-tight">{primeiroNome}! 👋</h1>
+    // Próxima aula / Meta semanal / Seu progresso usam flex-1: o card cresce
+    // pra preencher a sobra em celular alto, e o conteúdo cresce junto (ver
+    // escalaCss acima) em vez de só ganhar padding em volta. overflow-hidden
+    // é a garantia final contra rolagem em aparelho pequeno demais.
+    <div
+      style={escalaCss}
+      className="flex h-[calc(100dvh-6rem)] flex-col overflow-hidden px-4 pb-1.5 pt-3.5"
+    >
+      <div className="shrink-0" style={{ marginBottom: "var(--gap-card)" }}>
+        <p className="text-[var(--fs-tiny)] text-muted">{saudacao},</p>
+        <h1 className="text-[var(--fs-name)] font-bold leading-tight">{primeiroNome}! 👋</h1>
       </div>
 
       <Card
-        className={`flex flex-1 flex-col justify-center p-4 ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
+        style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
+        className={`flex flex-1 flex-col justify-center ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
       >
         {aulaHoje && jaFezHoje ? (
           <>
-            <p className="flex items-center gap-1.5 text-xs font-medium text-white/80">
+            <p className="flex items-center gap-1.5 text-[var(--fs-tiny)] font-medium text-white/80">
               <CheckCircle2 size={14} /> Treino de hoje
             </p>
-            <p className="mt-1 text-lg font-bold">{aulaHoje.nome} concluído! 🎉</p>
+            <p className="mt-1 text-[var(--fs-hero)] font-bold">{aulaHoje.nome} concluído! 🎉</p>
             <ButtonLink
               href={`/treino/${aulaHoje.id}`}
               size="sm"
@@ -155,10 +177,10 @@ export default async function HomePage() {
           </>
         ) : aulaHoje ? (
           <>
-            <p className="text-xs font-medium text-white/80">Próxima aula</p>
-            <p className="mt-1 text-lg font-bold">{aulaHoje.nome}</p>
+            <p className="text-[var(--fs-tiny)] font-medium text-white/80">Próxima aula</p>
+            <p className="mt-1 text-[var(--fs-hero)] font-bold">{aulaHoje.nome}</p>
             {aulaHoje.duracao_estimada_min ? (
-              <p className="text-xs text-white/80">~{aulaHoje.duracao_estimada_min} min</p>
+              <p className="text-[var(--fs-tiny)] text-white/80">~{aulaHoje.duracao_estimada_min} min</p>
             ) : null}
             <ButtonLink
               href={`/treino`}
@@ -171,23 +193,26 @@ export default async function HomePage() {
           </>
         ) : ciclo ? (
           <>
-            <p className="text-xs font-medium text-white/80">Próxima aula</p>
-            <p className="mt-1.5 text-sm text-white/90">Hoje é dia de descanso. 💪</p>
+            <p className="text-[var(--fs-tiny)] font-medium text-white/80">Próxima aula</p>
+            <p className="mt-1.5 text-[var(--fs-num)] text-white/90">Hoje é dia de descanso. 💪</p>
           </>
         ) : (
           <>
-            <p className="text-xs font-medium text-white/80">Próxima aula</p>
-            <p className="mt-1.5 text-sm text-white/90">
+            <p className="text-[var(--fs-tiny)] font-medium text-white/80">Próxima aula</p>
+            <p className="mt-1.5 text-[var(--fs-num)] text-white/90">
               Nenhum treino ativo no momento. Fale com seu personal.
             </p>
           </>
         )}
       </Card>
 
-      <Card className="flex flex-1 flex-col justify-center p-4">
+      <Card
+        style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
+        className="flex flex-1 flex-col justify-center"
+      >
         <div className="flex items-center justify-between">
-          <CardTitle>Meta semanal</CardTitle>
-          <span className="text-xs font-semibold text-muted">
+          <CardTitle className="text-[var(--fs-label)]">Meta semanal</CardTitle>
+          <span className="text-[var(--fs-tiny)] font-semibold text-muted">
             {concluidas} de {meta || "—"} treinos
           </span>
         </div>
@@ -197,49 +222,55 @@ export default async function HomePage() {
               {Array.from({ length: meta }, (_, i) => i < concluidas).map((feito, i) => (
                 <div
                   key={i}
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                  style={{ height: "var(--circle)", width: "var(--circle)" }}
+                  className={`flex shrink-0 items-center justify-center rounded-full ${
                     feito ? "bg-primary text-white" : "border-2 border-border text-border"
                   }`}
                 >
-                  {feito && <Check size={16} strokeWidth={3} />}
+                  {feito && <Check size={18} strokeWidth={3} />}
                 </div>
               ))}
             </div>
-            <p className="mt-2.5 text-xs text-muted">{legendaMetaSemanal(concluidas, meta)}</p>
+            <p className="mt-2.5 text-[var(--fs-tiny)] text-muted">{legendaMetaSemanal(concluidas, meta)}</p>
           </>
         )}
       </Card>
 
-      <Card className="flex flex-1 flex-col justify-center p-4">
-        <CardTitle className="mb-2.5">Seu progresso</CardTitle>
+      <Card
+        style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
+        className="flex flex-1 flex-col justify-center"
+      >
+        <CardTitle className="mb-2.5 text-[var(--fs-label)]">Seu progresso</CardTitle>
         <div className="grid grid-cols-3 gap-2">
-          <div className="rounded-xl bg-neutral-soft p-2.5 text-center">
-            <p className="text-[11px] text-muted">Peso</p>
-            <p className="text-sm font-bold">{pesoAtual !== null ? `${pesoAtual}kg` : "—"}</p>
+          <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
+            <p className="text-[var(--fs-tiny)] text-muted">Peso</p>
+            <p className="text-[var(--fs-num)] font-bold">{pesoAtual !== null ? `${pesoAtual}kg` : "—"}</p>
             {resumo.pesoDeltaKg !== null && (
-              <p className={`flex items-center justify-center gap-0.5 text-[11px] ${corTendencia(resumo.pesoTendencia).text}`}>
+              <p
+                className={`flex items-center justify-center gap-0.5 text-[var(--fs-tiny)] ${corTendencia(resumo.pesoTendencia).text}`}
+              >
                 <SetaTendencia tendencia={resumo.pesoTendencia} />
                 {Math.abs(resumo.pesoDeltaKg).toFixed(1)}kg
               </p>
             )}
           </div>
-          <div className="rounded-xl bg-neutral-soft p-2.5 text-center">
-            <p className="text-[11px] text-muted">Carga média</p>
-            <p className="text-sm font-bold">
+          <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
+            <p className="text-[var(--fs-tiny)] text-muted">Carga média</p>
+            <p className="text-[var(--fs-num)] font-bold">
               {resumo.cargaDeltaPct === null ? "—" : `${resumo.cargaDeltaPct > 0 ? "+" : ""}${resumo.cargaDeltaPct.toFixed(0)}%`}
             </p>
-            <p className="text-[11px] text-muted">30d</p>
+            <p className="text-[var(--fs-tiny)] text-muted">30d</p>
           </div>
-          <div className="rounded-xl bg-neutral-soft p-2.5 text-center">
-            <p className="text-[11px] text-muted">Aderência</p>
-            <p className="text-sm font-bold">{resumo.aderenciaPct}%</p>
-            <p className="text-[11px] text-muted">{qualificarAderencia(resumo.aderenciaPct)}</p>
+          <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
+            <p className="text-[var(--fs-tiny)] text-muted">Aderência</p>
+            <p className="text-[var(--fs-num)] font-bold">{resumo.aderenciaPct}%</p>
+            <p className="text-[var(--fs-tiny)] text-muted">{qualificarAderencia(resumo.aderenciaPct)}</p>
           </div>
         </div>
       </Card>
 
-      <Card className="shrink-0 bg-primary-soft p-3">
-        <p className="flex items-start gap-2 text-xs font-medium leading-snug text-foreground">
+      <Card style={{ padding: "var(--pad-card)" }} className="shrink-0 bg-primary-soft">
+        <p className="flex items-start gap-2 text-[var(--fs-num)] font-medium leading-snug text-foreground">
           <span>{fechamento.emoji}</span>
           {fechamento.texto}
         </p>
