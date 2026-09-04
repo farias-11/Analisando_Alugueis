@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAluno } from "@/lib/data/current-user";
 import { revalidatePath } from "next/cache";
-import { parseDecimalBR } from "@/lib/utils";
+import { parseDecimalBR, sanitizeFileName } from "@/lib/utils";
 
 export type SalvarMedidasState = { error?: string; ok?: boolean } | undefined;
 
@@ -46,7 +46,7 @@ export async function salvarMedidas(
   if (foto && foto.size > 0) {
     // bucket privado (foto de corpo = dado de saúde) — upload via admin,
     // guardamos só o path; a URL é resolvida sob demanda com createSignedUrl
-    const path = `${aluno.id}/${Date.now()}-${foto.name}`;
+    const path = `${aluno.id}/${Date.now()}-${sanitizeFileName(foto.name)}`;
     const admin = createAdminClient();
     const { data: upload, error: uploadError } = await admin.storage
       .from("fotos-progresso")

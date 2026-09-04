@@ -13,8 +13,6 @@ export type ConvidarAlunoState =
   | { sucesso: true; alunoId: string; alunoNome: string; whatsapp: string | null; conviteLink: string }
   | undefined;
 
-type SupaClient = Awaited<ReturnType<typeof createClient>>;
-
 /** Gera o link que o personal manda pro aluno (convite ou acesso direto).
  *
  * "invite" só funciona pra e-mail 100% novo no Supabase Auth. Na prática
@@ -27,17 +25,23 @@ type SupaClient = Awaited<ReturnType<typeof createClient>>;
  * — desde que nenhum outro aluno já esteja usando essa conta.
  */
 async function gerarLinkAcesso(
-  supabase: SupaClient,
   alunoId: string,
   email: string
 ): Promise<{ link: string } | { erro: string }> {
   const admin = createAdminClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  // sempre manda pra /convite/aceitar (nunca direto pra /home): é a única tela
+  // que captura o consentimento de dados de saúde (LGPD). Passa o alunoId
+  // explícito em vez de deixar aquela tela resolver só por e-mail — outro
+  // personal pode ter um aluno pendente com o mesmo e-mail (nada impede,
+  // cada um cadastra o "seu" aluno) e aí a busca por e-mail vira ambígua.
+  const nextAceitar = `/convite/aceitar?alunoId=${alunoId}`;
+  const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(nextAceitar)}`;
 
   const { data: convite, error: erroConvite } = await admin.auth.admin.generateLink({
     type: "invite",
     email,
-    options: { redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar` },
+    options: { redirectTo },
   });
   if (!erroConvite && convite) {
     return { link: convite.properties.action_link };
@@ -46,27 +50,20 @@ async function gerarLinkAcesso(
     return { erro: "Não foi possível gerar o link agora. Tente de novo." };
   }
 
+  // e-mail já tem conta no Auth (aluno excluído/recriado, ou convite
+  // reenviado) — gera um link de acesso (magiclink) pra essa conta, mas
+  // ainda pela tela de aceitar convite: só ela vincula auth_user_id junto
+  // com o consentimento de saúde. Ligar essa conta ao alunoId acontece lá
+  // dentro (aceitarConvite), não aqui.
   const { data: acesso, error: erroAcesso } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email,
-    options: { redirectTo: `${siteUrl}/auth/callback?next=/home` },
+    options: { redirectTo },
   });
   if (erroAcesso || !acesso) {
     return { erro: "Esse e-mail já tem uma conta no Duo Flow, mas não consegui gerar o link de acesso. Tente de novo." };
   }
 
-  const authUserId = acesso.user.id;
-  const { data: outroAluno } = await supabase
-    .from("alunos")
-    .select("id")
-    .eq("auth_user_id", authUserId)
-    .neq("id", alunoId)
-    .maybeSingle();
-  if (outroAluno) {
-    return { erro: "Esse e-mail já está vinculado a outro aluno no Duo Flow. Peça pro aluno usar outro e-mail." };
-  }
-
-  await supabase.from("alunos").update({ auth_user_id: authUserId, status_convite: "aceito" }).eq("id", alunoId);
   return { link: acesso.properties.action_link };
 }
 
@@ -121,7 +118,7 @@ export async function convidarAluno(
   // WhatsApp é o canal principal do convite (handoff, seção 4): gera o link
   // sem disparar e-mail automático — o personal manda ele mesmo por WhatsApp.
   // O e-mail continua disponível, mas como opção secundária (reenviarConvite).
-  const resultado = await gerarLinkAcesso(supabase, aluno.id, email);
+  const resultado = await gerarLinkAcesso(aluno.id, email);
   if ("erro" in resultado) {
     // aluno já foi criado no banco — o personal pode gerar o link de novo na ficha dele
     return { error: `Aluno criado, mas: ${resultado.erro}` };
@@ -286,8 +283,9 @@ export async function reenviarConvite(formData: FormData) {
 
   const admin = createAdminClient();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000";
+  const nextAceitar = `/convite/aceitar?alunoId=${alunoId}`;
   await admin.auth.admin.inviteUserByEmail(aluno.email, {
-    redirectTo: `${siteUrl}/auth/callback?next=/convite/aceitar`,
+    redirectTo: `${siteUrl}/auth/callback?next=${encodeURIComponent(nextAceitar)}`,
   });
 
   await supabase.from("alunos").update({ convite_enviado_em: new Date().toISOString() }).eq("id", alunoId);
@@ -316,7 +314,7 @@ export async function gerarLinkConviteWhatsapp(
     .maybeSingle();
   if (!aluno) return { error: "Aluno não encontrado." };
 
-  const resultado = await gerarLinkAcesso(supabase, alunoId, aluno.email);
+  const resultado = await gerarLinkAcesso(alunoId, aluno.email);
   if ("erro" in resultado) return { error: resultado.erro };
 
   await supabase.from("alunos").update({ convite_enviado_em: new Date().toISOString() }).eq("id", alunoId);

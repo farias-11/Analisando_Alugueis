@@ -5,7 +5,12 @@ import { BrandGlyph } from "@/components/brand/glyph";
 import { AceitarConviteForm } from "./aceitar-form";
 import { InstallPromptBanner } from "@/components/install-prompt-banner";
 
-export default async function AceitarConvitePage() {
+export default async function AceitarConvitePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ alunoId?: string }>;
+}) {
+  const { alunoId } = await searchParams;
   const supabase = await createClient();
   const {
     data: { user },
@@ -16,13 +21,15 @@ export default async function AceitarConvitePage() {
   }
 
   const admin = createAdminClient();
-  const { data: aluno } = await admin
-    .from("alunos")
-    .select("nome, email, status_convite")
-    .ilike("email", user.email)
-    .maybeSingle();
+  // alunoId vem do link gerado pelo personal (evita ambiguidade: o mesmo
+  // e-mail pode estar pendente em dois personals diferentes ao mesmo tempo).
+  // Sem alunoId (link antigo, gerado antes dessa mudança) cai no fallback
+  // por e-mail.
+  const { data: aluno } = alunoId
+    ? await admin.from("alunos").select("id, nome, email, status_convite").eq("id", alunoId).maybeSingle()
+    : await admin.from("alunos").select("id, nome, email, status_convite").ilike("email", user.email).maybeSingle();
 
-  if (!aluno) {
+  if (!aluno || aluno.email.toLowerCase() !== user.email.toLowerCase()) {
     redirect("/login?erro=convite_invalido");
   }
 
@@ -56,7 +63,7 @@ export default async function AceitarConvitePage() {
           Defina sua senha para acessar o Duo Flow como aluno do seu personal.
         </p>
 
-        <AceitarConviteForm />
+        <AceitarConviteForm alunoId={aluno.id} />
       </div>
     </div>
   );

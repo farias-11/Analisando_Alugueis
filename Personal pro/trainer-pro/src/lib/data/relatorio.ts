@@ -2,7 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import { getResumoEvolucao } from "@/lib/data/evolucao";
 import { getContextoAluno } from "@/lib/data/contexto";
-import { getCicloAtivo, getAulasDoCiclo, getExerciciosDaAula } from "@/lib/data/aluno";
+import { getCicloAtivo, getAulasDoCiclo } from "@/lib/data/aluno";
 import type { Aluno, Personal } from "@/lib/types";
 
 export interface RelatorioAlunoData {
@@ -50,17 +50,39 @@ export async function getRelatorioAlunoData(alunoId: string, personal: Personal)
   ]);
 
   const aulas = ciclo ? await getAulasDoCiclo(ciclo.id) : [];
-  const treinoAtual = await Promise.all(
-    aulas.map(async (a) => ({
-      aulaNome: a.nome,
-      exercicios: (await getExerciciosDaAula(a.id)).map((e) => ({
-        nome: e.exercicio.nome,
-        series: e.series,
-        repeticoes: e.repeticoes,
-        carga: e.carga_inicial,
-      })),
-    }))
-  );
+
+  type LinhaAulaExercicio = {
+    aula_id: string;
+    series: number;
+    repeticoes: string;
+    carga_inicial: number | null;
+    exercicio: { nome: string } | null;
+  };
+
+  // uma consulta só pra todas as aulas do ciclo (em vez de uma por aula) —
+  // agrupa em memória depois, mesmo padrão batched usado no resto do app
+  const { data: todosExercicios } = aulas.length
+    ? await supabase
+        .from("aula_exercicios")
+        .select("aula_id, series, repeticoes, carga_inicial, ordem, exercicio:exercicios(nome)")
+        .in(
+          "aula_id",
+          aulas.map((a) => a.id)
+        )
+        .order("ordem", { ascending: true })
+    : { data: [] as LinhaAulaExercicio[] };
+
+  const exerciciosPorAula = new Map<string, { nome: string; series: number; repeticoes: string; carga: number | null }[]>();
+  for (const e of (todosExercicios ?? []) as unknown as LinhaAulaExercicio[]) {
+    const lista = exerciciosPorAula.get(e.aula_id) ?? [];
+    lista.push({ nome: e.exercicio?.nome ?? "Exercício", series: e.series, repeticoes: e.repeticoes, carga: e.carga_inicial });
+    exerciciosPorAula.set(e.aula_id, lista);
+  }
+
+  const treinoAtual = aulas.map((a) => ({
+    aulaNome: a.nome,
+    exercicios: exerciciosPorAula.get(a.id) ?? [],
+  }));
 
   return {
     aluno: aluno as Aluno,

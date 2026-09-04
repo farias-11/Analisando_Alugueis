@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAluno, requirePersonal, requireAdmin } from "@/lib/data/current-user";
 import { revalidatePath } from "next/cache";
+import { sanitizeFileName } from "@/lib/utils";
 
 export type AbrirTicketSuporteState = { error?: string; ok?: boolean } | undefined;
 
@@ -18,7 +19,7 @@ async function uploadPrints(autorId: string, fotos: File[]): Promise<string[]> {
   const admin = createAdminClient();
   const resultados = await Promise.all(
     validas.map(async (foto) => {
-      const path = `${autorId}/${Date.now()}-${foto.name}`;
+      const path = `${autorId}/${Date.now()}-${sanitizeFileName(foto.name)}`;
       const { data: upload, error } = await admin.storage
         .from("tickets")
         .upload(`suporte/${path}`, foto, { contentType: foto.type });

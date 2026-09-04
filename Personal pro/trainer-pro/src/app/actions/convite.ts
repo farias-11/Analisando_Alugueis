@@ -14,6 +14,7 @@ export async function aceitarConvite(
   _prevState: AceitarConviteState,
   formData: FormData
 ): Promise<AceitarConviteState> {
+  const alunoIdParam = String(formData.get("alunoId") || "").trim() || null;
   const senha = String(formData.get("senha") || "");
   const confirmarSenha = String(formData.get("confirmarSenha") || "");
   const aceitaTermos = formData.get("aceitaTermos") === "on";
@@ -51,15 +52,27 @@ export async function aceitarConvite(
   }
 
   const admin = createAdminClient();
-  const { data: aluno, error: findError } = await admin
-    .from("alunos")
-    .select("id, status_convite")
-    .ilike("email", user.email)
-    .eq("status_convite", "pendente")
-    .maybeSingle();
+  // alunoId (do link gerado pelo personal) resolve sem ambiguidade — o mesmo
+  // e-mail pode estar pendente em dois personals ao mesmo tempo, então cair
+  // só no e-mail pode achar a linha errada (ou nenhuma, se houver duas).
+  // Sem alunoId (link antigo) cai no fallback por e-mail, igual antes.
+  const { data: aluno, error: findError } = alunoIdParam
+    ? await admin.from("alunos").select("id, email, status_convite").eq("id", alunoIdParam).maybeSingle()
+    : await admin.from("alunos").select("id, email, status_convite").ilike("email", user.email).eq("status_convite", "pendente").maybeSingle();
 
-  if (findError || !aluno) {
+  if (findError || !aluno || aluno.email.toLowerCase() !== user.email.toLowerCase()) {
     return { error: "Não encontramos um convite pendente para este e-mail." };
+  }
+  if (aluno.status_convite === "aceito") {
+    redirect("/home");
+  }
+
+  // essa conta do Supabase Auth (mesmo e-mail) já pode estar vinculada a OUTRO
+  // aluno — do mesmo personal ou de um personal diferente. Sem essa trava,
+  // aceitar aqui desvincularia silenciosamente o outro aluno da própria conta.
+  const { data: outroAluno } = await admin.from("alunos").select("id").eq("auth_user_id", user.id).neq("id", aluno.id).maybeSingle();
+  if (outroAluno) {
+    return { error: "Esse e-mail já está vinculado a outro aluno no Duo Flow. Peça pro seu personal usar outro e-mail." };
   }
 
   const { error: linkError } = await admin

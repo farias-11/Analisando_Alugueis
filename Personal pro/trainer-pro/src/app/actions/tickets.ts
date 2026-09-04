@@ -6,6 +6,7 @@ import { requireAluno, requirePersonal } from "@/lib/data/current-user";
 import { mensagemTicketDor, buildWhatsappLink } from "@/lib/whatsapp";
 import { notificarAluno, notificarPersonal } from "@/lib/notificar";
 import { revalidatePath } from "next/cache";
+import { sanitizeFileName } from "@/lib/utils";
 
 export type CriarTicketState = { error?: string; whatsappUrl?: string } | undefined;
 
@@ -30,7 +31,7 @@ export async function criarTicket(
   // guardamos só o path; a URL é resolvida sob demanda com createSignedUrl
   let fotoPath: string | null = null;
   if (foto && foto.size > 0) {
-    const path = `${aluno.id}/${Date.now()}-${foto.name}`;
+    const path = `${aluno.id}/${Date.now()}-${sanitizeFileName(foto.name)}`;
     const admin = createAdminClient();
     const { data: upload, error: uploadError } = await admin.storage
       .from("tickets")

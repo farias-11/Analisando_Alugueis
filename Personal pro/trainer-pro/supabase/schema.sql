@@ -222,6 +222,7 @@ create table execucoes (
 
 create index idx_execucoes_aula_exercicio on execucoes (aula_exercicio_id);
 create index idx_execucoes_aluno on execucoes (aluno_id);
+create index idx_execucoes_aluno_data on execucoes (aluno_id, data desc);
 -- uma série só tem um registro por dia — reenviar a mesma série atualiza em vez
 -- de duplicar (permite editar carga/reps depois de "finalizar todas as séries")
 create unique index idx_execucoes_serie_unica on execucoes (aula_exercicio_id, aluno_id, serie_numero, dia);

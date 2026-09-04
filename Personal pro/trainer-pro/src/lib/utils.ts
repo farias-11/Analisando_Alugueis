@@ -16,3 +16,16 @@ export function parseDecimalBR(v: FormDataEntryValue | string | null | undefined
   const n = Number(s);
   return Number.isNaN(n) ? null : n;
 }
+
+/** Nome de arquivo enviado pelo usuário, seguro pra virar parte de um path de
+ * storage. O upload sempre vai pro client admin (service role, ignora RLS de
+ * bucket) prefixado por um id confiável (aluno/personal/autor) — mas o nome
+ * original do arquivo, se usado cru, pode conter "/" ou "..", escapando essa
+ * pasta. Mantém só letras/números/._- e limita o tamanho. */
+export function sanitizeFileName(nome: string): string {
+  const limpo = nome
+    .normalize("NFKD")
+    .replace(/[^\w.-]/g, "_")
+    .slice(-100);
+  return limpo || "arquivo";
+}

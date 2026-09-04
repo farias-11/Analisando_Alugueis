@@ -6,6 +6,7 @@ import { requireAluno } from "@/lib/data/current-user";
 import { validarSenha } from "@/lib/password";
 import { revalidatePath } from "next/cache";
 import { TIPOS_NOTIFICACAO_ALUNO } from "@/lib/constantes";
+import { sanitizeFileName } from "@/lib/utils";
 
 export type TrocarSenhaState = { error?: string; ok?: boolean } | undefined;
 
@@ -33,7 +34,7 @@ export async function atualizarFotoAluno(formData: FormData) {
   if (!foto || foto.size === 0) return;
 
   const admin = createAdminClient();
-  const path = `aluno/${aluno.id}/${Date.now()}-${foto.name}`;
+  const path = `aluno/${aluno.id}/${Date.now()}-${sanitizeFileName(foto.name)}`;
   const { data: upload, error } = await admin.storage
     .from("avatares")
     .upload(path, foto, { contentType: foto.type });

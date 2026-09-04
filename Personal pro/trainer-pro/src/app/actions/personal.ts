@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { requirePersonal } from "@/lib/data/current-user";
 import { revalidatePath } from "next/cache";
 import { TIPOS_NOTIFICACAO_PERSONAL } from "@/lib/constantes";
+import { sanitizeFileName } from "@/lib/utils";
 
 export async function atualizarPerfilPersonal(formData: FormData) {
   const { personal } = await requirePersonal();
@@ -29,7 +30,7 @@ export async function atualizarFotoPersonal(formData: FormData) {
   if (!foto || foto.size === 0) return;
 
   const admin = createAdminClient();
-  const path = `personal/${personal.id}/${Date.now()}-${foto.name}`;
+  const path = `personal/${personal.id}/${Date.now()}-${sanitizeFileName(foto.name)}`;
   const { data: upload, error } = await admin.storage
     .from("avatares")
     .upload(path, foto, { contentType: foto.type });
