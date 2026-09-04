@@ -364,7 +364,7 @@ export function ExecucaoClient({
   const marcaAtualParaBadge = continuacao ? ultimaMarcaContinuacao : ultimaMarca;
 
   return (
-    <ScrollFit rolar={false} className="space-y-1 p-3">
+    <ScrollFit rolar={false} className="space-y-1.5 p-3">
       {descansoAberto && (
         <TimerDescanso
           duracaoSeg={(faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60}
@@ -382,7 +382,7 @@ export function ExecucaoClient({
           sem rolar (mesmo objetivo da Home, ver viewport-fit.tsx). O vídeo
           continua sempre visível e com controles completos, só não domina
           mais a tela inteira. */}
-      <div className="h-[94px] w-full overflow-hidden rounded-card bg-black">
+      <div className="h-[300px] w-full shrink-0 overflow-hidden rounded-card bg-black">
         {embedUrl ? (
           <iframe
             src={embedUrl}

@@ -11,7 +11,13 @@ import { cn } from "@/lib/utils";
 // de hoje pode ter 3 ou 12 exercícios) ganham uma altura medida e rolam POR
 // DENTRO DE SI MESMAS — o resto da tela (TopBar, header, nav inferior) nunca
 // sai do lugar, só a lista em si desliza quando não cabe tudo.
-const MEDIA_FLUXO_NATURAL = "(min-width: 768px), (orientation: landscape) and (max-height: 500px)";
+//
+// Só a largura decide "modo desktop" aqui (sem a cláusula extra de paisagem
+// curta que a Home usa) — essa cláusula existe lá por causa de um bug
+// específico de vh/dvh no Safari em paisagem, mas aqui já testamos e ela
+// disparava "falso positivo" em celular normal em pé, fazendo a tela cair
+// no fluxo natural (sem altura forçada) e sobrar um vão em branco enorme.
+const MEDIA_FLUXO_NATURAL = "(min-width: 768px)";
 
 export function ScrollFit({
   children,
@@ -57,7 +63,9 @@ export function ScrollFit({
     // (mesmo critério da Home — não existe BottomNav fixa pra medir contra).
     if (desktop) return;
 
-    function medir() {
+    // tentativas > 0 = chamada de reconfirmação (ver abaixo) — evita
+    // recursão infinita se por algum motivo nunca convergir.
+    function medir(tentativas = 0) {
       const el = ref.current;
       if (!el) return;
       const viewportH = window.visualViewport?.height ?? window.innerHeight;
@@ -76,14 +84,32 @@ export function ScrollFit({
       el.style.height = `${alvo}px`;
       const excesso = Math.max(0, document.documentElement.scrollHeight - viewportH);
       setAltura(Math.max(160, alvo - excesso));
+
+      // Reconfirma um frame depois — cobre timing (fonte carregando,
+      // Safari com a barra em transição) sem arriscar uma chamada
+      // concorrente desfazer a correção no meio do caminho.
+      if (tentativas < 3) {
+        requestAnimationFrame(() => {
+          const aindaExcesso =
+            document.documentElement.scrollHeight - (window.visualViewport?.height ?? window.innerHeight);
+          if (aindaExcesso > 1) medir(tentativas + 1);
+        });
+      }
     }
 
     medir();
+    // Reconfirma um pouco depois do mount — vídeo/iframe (YouTube, mídia
+    // enviada) carrega de forma assíncrona e pode crescer DEPOIS da
+    // primeira medição, sem disparar resize nenhum.
+    const t1 = setTimeout(() => medir(), 350);
+    const t2 = setTimeout(() => medir(), 1200);
     const onResize = () => medir();
     window.addEventListener("resize", onResize);
     window.visualViewport?.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
     return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
