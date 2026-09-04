@@ -8,12 +8,12 @@ import {
 } from "@/lib/data/aluno";
 import { getResumoEvolucao, type ResumoEvolucao } from "@/lib/data/evolucao";
 import { getGraficoPeso } from "@/lib/data/graficos";
-import { corTendencia, saudacaoPorHorario } from "@/lib/status";
+import { saudacaoPorHorario, type Tendencia } from "@/lib/status";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { SetaTendencia } from "@/components/evolution-summary";
 import { ViewportFit } from "./viewport-fit";
-import { Check, CheckCircle2 } from "lucide-react";
+import { Check, CheckCircle2, Dumbbell } from "lucide-react";
 
 // legenda abaixo dos círculos da meta semanal — regra simples baseada no
 // progresso real da semana, sem IA (handoff da Home do aluno, seção 2.3)
@@ -93,10 +93,19 @@ function mensagemFechamento(
   return { emoji: "👍", texto: "Você está evoluindo! Continue assim." };
 }
 
-function qualificarAderencia(pct: number): string {
-  if (pct >= 80) return "ótimo";
-  if (pct >= 50) return "bom";
-  return "atenção";
+function qualificarAderencia(pct: number): { label: string; tendencia: Tendencia } {
+  if (pct >= 80) return { label: "ótimo", tendencia: "positiva" };
+  if (pct >= 50) return { label: "bom", tendencia: "neutra" };
+  return { label: "atenção", tendencia: "negativa" };
+}
+
+// Bolinha verde/amarela/vermelha por trás de cada status do "Seu progresso" —
+// mesmo critério de Tendencia já usado em toda a evolução (peso/carga/
+// aderência), só adiciona cor+emoji visual, nada de dado novo.
+function corEmoji(t: Tendencia): { texto: string; emoji: string } {
+  if (t === "positiva") return { texto: "text-success", emoji: "🟢" };
+  if (t === "negativa") return { texto: "text-danger", emoji: "🔴" };
+  return { texto: "text-warning", emoji: "🟡" };
 }
 
 export default async function HomePage() {
@@ -130,13 +139,18 @@ export default async function HomePage() {
     // estivesse escondida, mesmo visível). Todo o resto (fonte, círculos,
     // padding) escala a partir desse mesmo número medido — ver viewport-fit.tsx.
     <ViewportFit>
-      <div className="shrink-0" style={{ marginBottom: "var(--gap-card)" }}>
-        <p className="text-[var(--fs-tiny)] text-muted">{saudacao},</p>
-        <h1 className="text-[var(--fs-name)] font-bold leading-tight">{primeiroNome}! 👋</h1>
+      {/* Uma linha só (em vez de "saudação," + nome em linhas separadas) pra
+          ficar na mesma altura do sino de notificação (renderizado pelo
+          layout, sticky h-0 por cima) e sobrar mais altura pra "Próxima
+          aula" crescer. */}
+      <div className="shrink-0 pr-10" style={{ marginBottom: "var(--gap-card)" }}>
+        <h1 className="truncate text-[var(--fs-name)] font-bold leading-tight">
+          {saudacao}, {primeiroNome}! 👋
+        </h1>
       </div>
 
       <Card
-        style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
+        style={{ padding: "calc(var(--pad-card) + 4px)", marginBottom: "var(--gap-card)" }}
         className={`flex flex-1 flex-col justify-center ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
       >
         {aulaHoje && jaFezHoje ? (
@@ -144,7 +158,12 @@ export default async function HomePage() {
             <p className="flex items-center gap-1.5 text-[var(--fs-tiny)] font-medium text-white/80">
               <CheckCircle2 size={14} /> Treino de hoje
             </p>
-            <p className="mt-1 text-[var(--fs-hero)] font-bold">{aulaHoje.nome} concluído! 🎉</p>
+            <p className="mt-1 flex items-center gap-2 text-[var(--fs-hero)] font-bold">
+              <span className="flex shrink-0 items-center justify-center rounded-full bg-white p-1.5">
+                <Dumbbell size={16} className="text-primary" />
+              </span>
+              {aulaHoje.nome} concluído! 🎉
+            </p>
             <ButtonLink
               href={`/treino/${aulaHoje.id}`}
               size="sm"
@@ -157,7 +176,12 @@ export default async function HomePage() {
         ) : aulaHoje ? (
           <>
             <p className="text-[var(--fs-tiny)] font-medium text-white/80">Próxima aula</p>
-            <p className="mt-1 text-[var(--fs-hero)] font-bold">{aulaHoje.nome}</p>
+            <p className="mt-1 flex items-center gap-2 text-[var(--fs-hero)] font-bold">
+              <span className="flex shrink-0 items-center justify-center rounded-full bg-white p-1.5">
+                <Dumbbell size={16} className="text-primary" />
+              </span>
+              {aulaHoje.nome}
+            </p>
             {aulaHoje.duracao_estimada_min ? (
               <p className="text-[var(--fs-tiny)] text-white/80">~{aulaHoje.duracao_estimada_min} min</p>
             ) : null}
@@ -197,7 +221,7 @@ export default async function HomePage() {
         </div>
         {meta > 0 && (
           <>
-            <div className="mt-3 flex gap-2">
+            <div className={`mt-3 flex ${meta > 1 ? "justify-between" : "justify-center"}`}>
               {Array.from({ length: meta }, (_, i) => i < concluidas).map((feito, i) => (
                 <div
                   key={i}
@@ -225,12 +249,13 @@ export default async function HomePage() {
             <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Peso</p>
             <p className="text-[var(--fs-num)] font-bold">{pesoAtual !== null ? `${pesoAtual}kg` : "—"}</p>
             <p
-              className={`flex items-center justify-center gap-0.5 whitespace-nowrap text-[var(--fs-tiny)] ${
-                resumo.pesoDeltaKg !== null ? corTendencia(resumo.pesoTendencia).text : "text-muted"
+              className={`flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-semibold ${
+                resumo.pesoDeltaKg !== null ? corEmoji(resumo.pesoTendencia).texto : "text-muted"
               }`}
             >
               {resumo.pesoDeltaKg !== null ? (
                 <>
+                  <span>{corEmoji(resumo.pesoTendencia).emoji}</span>
                   <SetaTendencia tendencia={resumo.pesoTendencia} />
                   {Math.abs(resumo.pesoDeltaKg).toFixed(1)}kg
                 </>
@@ -241,15 +266,35 @@ export default async function HomePage() {
           </div>
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
             <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Carga</p>
-            <p className="text-[var(--fs-num)] font-bold">
+            <p
+              className={`text-[var(--fs-num)] font-bold ${
+                resumo.cargaDeltaPct !== null ? corEmoji(resumo.cargaTendencia).texto : ""
+              }`}
+            >
               {resumo.cargaDeltaPct === null ? "—" : `${resumo.cargaDeltaPct > 0 ? "+" : ""}${resumo.cargaDeltaPct.toFixed(0)}%`}
             </p>
-            <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">30d</p>
+            <p
+              className={`flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-semibold ${
+                resumo.cargaDeltaPct !== null ? corEmoji(resumo.cargaTendencia).texto : "text-muted"
+              }`}
+            >
+              {resumo.cargaDeltaPct !== null && <span>{corEmoji(resumo.cargaTendencia).emoji}</span>}
+              30d
+            </p>
           </div>
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
             <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Aderência</p>
-            <p className="text-[var(--fs-num)] font-bold">{resumo.aderenciaPct}%</p>
-            <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">{qualificarAderencia(resumo.aderenciaPct)}</p>
+            <p className={`text-[var(--fs-num)] font-bold ${corEmoji(qualificarAderencia(resumo.aderenciaPct).tendencia).texto}`}>
+              {resumo.aderenciaPct}%
+            </p>
+            <p
+              className={`flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-semibold ${
+                corEmoji(qualificarAderencia(resumo.aderenciaPct).tendencia).texto
+              }`}
+            >
+              <span>{corEmoji(qualificarAderencia(resumo.aderenciaPct).tendencia).emoji}</span>
+              {qualificarAderencia(resumo.aderenciaPct).label}
+            </p>
           </div>
         </div>
       </Card>
