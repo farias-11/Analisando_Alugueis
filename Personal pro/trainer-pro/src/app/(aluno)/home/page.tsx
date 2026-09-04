@@ -11,9 +11,8 @@ import { getGraficoPeso } from "@/lib/data/graficos";
 import { saudacaoPorHorario, type Tendencia } from "@/lib/status";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
-import { SetaTendencia } from "@/components/evolution-summary";
 import { ViewportFit } from "./viewport-fit";
-import { Check, CheckCircle2, Dumbbell } from "lucide-react";
+import { Check, CheckCircle2, Dumbbell, Minus, Play, TrendingDown, TrendingUp } from "lucide-react";
 
 // legenda abaixo dos círculos da meta semanal — regra simples baseada no
 // progresso real da semana, sem IA (handoff da Home do aluno, seção 2.3)
@@ -99,13 +98,36 @@ function qualificarAderencia(pct: number): { label: string; tendencia: Tendencia
   return { label: "atenção", tendencia: "negativa" };
 }
 
-// Bolinha verde/amarela/vermelha por trás de cada status do "Seu progresso" —
-// mesmo critério de Tendencia já usado em toda a evolução (peso/carga/
-// aderência), só adiciona cor+emoji visual, nada de dado novo.
-function corEmoji(t: Tendencia): { texto: string; emoji: string } {
-  if (t === "positiva") return { texto: "text-success", emoji: "🟢" };
-  if (t === "negativa") return { texto: "text-danger", emoji: "🔴" };
-  return { texto: "text-warning", emoji: "🟡" };
+// mesma palavra de qualificação usada em aderência, mas a partir da
+// Tendencia já calculada (peso/carga) — um único vocabulário pro cartão
+// inteiro em vez de "positiva/negativa" cru.
+function qualificarTendencia(t: Tendencia): string {
+  if (t === "positiva") return "ótimo";
+  if (t === "negativa") return "atenção";
+  return "bom";
+}
+
+function corTexto(t: Tendencia): string {
+  if (t === "positiva") return "text-success";
+  if (t === "negativa") return "text-danger";
+  return "text-warning";
+}
+
+// setinha discreta indicando se o valor subiu, desceu ou ficou igual — a
+// direção vem do sinal real do delta (ou da Tendencia, quando não há delta
+// numérico, como aderência); a cor do ícone é sempre âmbar, só a palavra
+// de qualificação ao lado que muda de verde/âmbar/vermelho.
+function IconeDirecao({ delta }: { delta: number }) {
+  if (delta > 0) return <TrendingUp size={12} className="text-warning" />;
+  if (delta < 0) return <TrendingDown size={12} className="text-warning" />;
+  return <Minus size={12} className="text-warning" />;
+}
+
+// pra aderência não há delta numérico exposto, só a tendência (resumo.aderenciaTendencia)
+function direcaoPorTendencia(t: Tendencia): number {
+  if (t === "positiva") return 1;
+  if (t === "negativa") return -1;
+  return 0;
 }
 
 export default async function HomePage() {
@@ -138,30 +160,25 @@ export default async function HomePage() {
     // Safari real do iPhone (calculam como se a barra do navegador já
     // estivesse escondida, mesmo visível). Todo o resto (fonte, círculos,
     // padding) escala a partir desse mesmo número medido — ver viewport-fit.tsx.
-    <ViewportFit>
-      {/* Uma linha só (em vez de "saudação," + nome em linhas separadas) pra
-          ficar na mesma altura do sino de notificação (renderizado pelo
-          layout, sticky h-0 por cima) e sobrar mais altura pra "Próxima
-          aula" crescer. */}
-      <div className="shrink-0 pr-10" style={{ marginBottom: "var(--gap-card)" }}>
-        <h1 className="truncate text-[var(--fs-name)] font-bold leading-tight">
-          {saudacao}, {primeiroNome}! 👋
-        </h1>
-      </div>
-
+    <ViewportFit
+      header={
+        <div>
+          <p className="text-[var(--fs-tiny)] leading-none text-muted">{saudacao},</p>
+          <h1 className="mt-0.5 truncate pr-10 text-[var(--fs-name)] font-bold leading-none">{primeiroNome}! 👋</h1>
+        </div>
+      }
+    >
       <Card
-        style={{ padding: "calc(var(--pad-card) + 4px)", marginBottom: "var(--gap-card)" }}
-        className={`flex flex-1 flex-col justify-center ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
+        style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
+        className={`relative flex flex-1 flex-col justify-center ${jaFezHoje ? "bg-success text-white" : "bg-primary text-white"}`}
       >
+        <Dumbbell size={22} strokeWidth={1.75} className="absolute right-4 top-4 text-white/35" />
         {aulaHoje && jaFezHoje ? (
           <>
-            <p className="flex items-center gap-1.5 text-[var(--fs-tiny)] font-medium text-white/80">
+            <p className="flex items-center gap-1.5 text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-white/80">
               <CheckCircle2 size={14} /> Treino de hoje
             </p>
-            <p className="mt-1 flex items-center gap-2 text-[var(--fs-hero)] font-bold">
-              <span className="flex shrink-0 items-center justify-center rounded-full bg-white p-1.5">
-                <Dumbbell size={16} className="text-primary" />
-              </span>
+            <p className="mt-1 max-w-[85%] text-[var(--fs-hero)] font-bold leading-tight">
               {aulaHoje.nome} concluído! 🎉
             </p>
             <ButtonLink
@@ -175,33 +192,28 @@ export default async function HomePage() {
           </>
         ) : aulaHoje ? (
           <>
-            <p className="text-[var(--fs-tiny)] font-medium text-white/80">Próxima aula</p>
-            <p className="mt-1 flex items-center gap-2 text-[var(--fs-hero)] font-bold">
-              <span className="flex shrink-0 items-center justify-center rounded-full bg-white p-1.5">
-                <Dumbbell size={16} className="text-primary" />
-              </span>
-              {aulaHoje.nome}
+            <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-white/80">Próxima aula</p>
+            <p className="mt-1 max-w-[85%] text-[var(--fs-hero)] font-bold leading-tight">{aulaHoje.nome}</p>
+            <p className="mt-0.5 text-[var(--fs-tiny)] text-white/80">
+              Hoje{aulaHoje.duracao_estimada_min ? ` • ~${aulaHoje.duracao_estimada_min} min` : ""}
             </p>
-            {aulaHoje.duracao_estimada_min ? (
-              <p className="text-[var(--fs-tiny)] text-white/80">~{aulaHoje.duracao_estimada_min} min</p>
-            ) : null}
             <ButtonLink
               href={`/treino`}
               size="sm"
               variant="secondary"
               className="mt-3 w-full bg-white text-primary-dark hover:bg-white/90"
             >
-              Começar treino
+              <Play size={14} className="fill-current" /> Começar treino
             </ButtonLink>
           </>
         ) : ciclo ? (
           <>
-            <p className="text-[var(--fs-tiny)] font-medium text-white/80">Próxima aula</p>
+            <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-white/80">Próxima aula</p>
             <p className="mt-1.5 text-[var(--fs-num)] text-white/90">Hoje é dia de descanso. 💪</p>
           </>
         ) : (
           <>
-            <p className="text-[var(--fs-tiny)] font-medium text-white/80">Próxima aula</p>
+            <p className="text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-white/80">Próxima aula</p>
             <p className="mt-1.5 text-[var(--fs-num)] text-white/90">
               Nenhum treino ativo no momento. Fale com seu personal.
             </p>
@@ -221,7 +233,7 @@ export default async function HomePage() {
         </div>
         {meta > 0 && (
           <>
-            <div className={`mt-3 flex ${meta > 1 ? "justify-between" : "justify-center"}`}>
+            <div className="mt-3 flex justify-center gap-2">
               {Array.from({ length: meta }, (_, i) => i < concluidas).map((feito, i) => (
                 <div
                   key={i}
@@ -234,7 +246,7 @@ export default async function HomePage() {
                 </div>
               ))}
             </div>
-            <p className="mt-2.5 text-[var(--fs-tiny)] text-muted">{legendaMetaSemanal(concluidas, meta)}</p>
+            <p className="mt-2 text-[var(--fs-tiny)] text-muted">{legendaMetaSemanal(concluidas, meta)}</p>
           </>
         )}
       </Card>
@@ -243,57 +255,42 @@ export default async function HomePage() {
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
         className="flex flex-1 flex-col justify-center"
       >
-        <CardTitle className="mb-2.5 text-[var(--fs-label)]">Seu progresso</CardTitle>
+        <CardTitle className="mb-2 text-[var(--fs-label)]">Seu progresso</CardTitle>
         <div className="grid grid-cols-3 gap-2">
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
             <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Peso</p>
             <p className="text-[var(--fs-num)] font-bold">{pesoAtual !== null ? `${pesoAtual}kg` : "—"}</p>
-            <p
-              className={`flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-semibold ${
-                resumo.pesoDeltaKg !== null ? corEmoji(resumo.pesoTendencia).texto : "text-muted"
-              }`}
-            >
-              {resumo.pesoDeltaKg !== null ? (
-                <>
-                  <span>{corEmoji(resumo.pesoTendencia).emoji}</span>
-                  <SetaTendencia tendencia={resumo.pesoTendencia} />
-                  {Math.abs(resumo.pesoDeltaKg).toFixed(1)}kg
-                </>
-              ) : (
-                "30d"
-              )}
-            </p>
+            {resumo.pesoDeltaKg !== null ? (
+              <p className="flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)]">
+                <IconeDirecao delta={resumo.pesoDeltaKg} />
+                <span className={corTexto(resumo.pesoTendencia)}>{qualificarTendencia(resumo.pesoTendencia)}</span>
+              </p>
+            ) : (
+              <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">30d</p>
+            )}
           </div>
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
             <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Carga</p>
-            <p
-              className={`text-[var(--fs-num)] font-bold ${
-                resumo.cargaDeltaPct !== null ? corEmoji(resumo.cargaTendencia).texto : ""
-              }`}
-            >
+            <p className="text-[var(--fs-num)] font-bold">
               {resumo.cargaDeltaPct === null ? "—" : `${resumo.cargaDeltaPct > 0 ? "+" : ""}${resumo.cargaDeltaPct.toFixed(0)}%`}
             </p>
-            <p
-              className={`flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-semibold ${
-                resumo.cargaDeltaPct !== null ? corEmoji(resumo.cargaTendencia).texto : "text-muted"
-              }`}
-            >
-              {resumo.cargaDeltaPct !== null && <span>{corEmoji(resumo.cargaTendencia).emoji}</span>}
-              30d
-            </p>
+            {resumo.cargaDeltaPct !== null ? (
+              <p className="flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)]">
+                <IconeDirecao delta={resumo.cargaDeltaPct} />
+                <span className={corTexto(resumo.cargaTendencia)}>{qualificarTendencia(resumo.cargaTendencia)}</span>
+              </p>
+            ) : (
+              <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">30d</p>
+            )}
           </div>
           <div style={{ padding: "var(--pad-inner)" }} className="rounded-xl bg-neutral-soft text-center">
             <p className="whitespace-nowrap text-[var(--fs-tiny)] text-muted">Aderência</p>
-            <p className={`text-[var(--fs-num)] font-bold ${corEmoji(qualificarAderencia(resumo.aderenciaPct).tendencia).texto}`}>
-              {resumo.aderenciaPct}%
-            </p>
-            <p
-              className={`flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)] font-semibold ${
-                corEmoji(qualificarAderencia(resumo.aderenciaPct).tendencia).texto
-              }`}
-            >
-              <span>{corEmoji(qualificarAderencia(resumo.aderenciaPct).tendencia).emoji}</span>
-              {qualificarAderencia(resumo.aderenciaPct).label}
+            <p className="text-[var(--fs-num)] font-bold">{resumo.aderenciaPct}%</p>
+            <p className="flex items-center justify-center gap-1 whitespace-nowrap text-[var(--fs-tiny)]">
+              <IconeDirecao delta={direcaoPorTendencia(resumo.aderenciaTendencia)} />
+              <span className={corTexto(qualificarAderencia(resumo.aderenciaPct).tendencia)}>
+                {qualificarAderencia(resumo.aderenciaPct).label}
+              </span>
             </p>
           </div>
         </div>

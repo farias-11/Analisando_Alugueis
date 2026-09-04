@@ -26,9 +26,9 @@ const TAMANHOS = {
   "--fs-hero": [18, 25],
   "--fs-name": [20, 27],
   "--circle": [36, 48],
-  "--pad-card": [11, 22],
-  "--pad-inner": [8, 14],
-  "--gap-card": [7, 16],
+  "--pad-card": [9, 22],
+  "--pad-inner": [7, 14],
+  "--gap-card": [6, 16],
 } as const;
 
 function calcularVariaveis(alturaDisponivel: number): React.CSSProperties {
@@ -40,7 +40,7 @@ function calcularVariaveis(alturaDisponivel: number): React.CSSProperties {
   return vars as React.CSSProperties;
 }
 
-export function ViewportFit({ children }: { children: ReactNode }) {
+export function ViewportFit({ header, children }: { header?: ReactNode; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   // valor inicial = o piso (nunca estoura no primeiro paint, antes de medir de verdade)
   const [altura, setAltura] = useState(CONTEUDO_MIN);
@@ -112,10 +112,22 @@ export function ViewportFit({ children }: { children: ReactNode }) {
   const alturaParaEscala = Math.max(altura * 0.85, CONTEUDO_MIN);
   const vars = calcularVariaveis(alturaParaEscala);
 
+  // header (se houver) fica PINADO no topo, com o mesmo pt-3.5/px-4 do sino
+  // de notificação (renderizado pelo layout, ver (aluno)/layout.tsx) — assim
+  // as duas coisas ficam sempre na mesma altura, independente de quanta
+  // sobra existe. O resto do conteúdo continua centralizado no espaço que
+  // sobra abaixo do header.
   return (
-    <div ref={ref} style={{ height: `${altura}px` }} className="flex flex-col justify-center overflow-hidden">
-      <div style={{ ...vars }} className="flex flex-col px-4">
-        {children}
+    <div ref={ref} style={{ height: `${altura}px` }} className="flex flex-col overflow-hidden">
+      {header && (
+        <div style={{ ...vars, paddingBottom: "var(--gap-card)" }} className="shrink-0 px-4 pt-3.5">
+          {header}
+        </div>
+      )}
+      <div className="flex flex-1 flex-col justify-center overflow-hidden">
+        <div style={{ ...vars }} className="flex flex-col px-4">
+          {children}
+        </div>
       </div>
     </div>
   );
