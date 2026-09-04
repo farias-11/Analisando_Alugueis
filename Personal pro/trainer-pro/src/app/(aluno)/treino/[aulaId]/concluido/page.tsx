@@ -1,9 +1,10 @@
 import { requireAluno } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
-import { getExerciciosDaAula } from "@/lib/data/aluno";
+import { getExerciciosDaAula, getCicloAtivo, getAulasDoCiclo, getAderenciaSemana } from "@/lib/data/aluno";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
-import { PartyPopper, Trophy, Dumbbell, Clock } from "lucide-react";
+import { Check, ChevronLeft, PartyPopper, Trophy, Dumbbell, Clock } from "lucide-react";
 
 export default async function TreinoConcluidoPage({
   params,
@@ -14,11 +15,18 @@ export default async function TreinoConcluidoPage({
   const { aulaId } = await params;
   const supabase = await createClient();
 
-  const [{ data: aula }, exercicios] = await Promise.all([
+  const [{ data: aula }, exercicios, ciclo] = await Promise.all([
     supabase.from("aulas").select("*").eq("id", aulaId).maybeSingle(),
     getExerciciosDaAula(aulaId),
+    getCicloAtivo(aluno.id),
   ]);
   if (!aula) notFound();
+
+  // meta semanal (mesmo dado da Home) pra celebrar o progresso da semana
+  // aqui também, não só recordes/tempo deste treino específico
+  const { concluidas: metaConcluidas, meta: metaTotal } = ciclo
+    ? await getAderenciaSemana(aluno.id, await getAulasDoCiclo(ciclo.id))
+    : { concluidas: 0, meta: 0 };
 
   const aulaExercicioIds = exercicios.map((e) => e.id);
   const hojeInicio = new Date();
@@ -76,43 +84,78 @@ export default async function TreinoConcluidoPage({
   }
 
   return (
-    <div className="flex min-h-[80dvh] flex-col items-center justify-center gap-6 px-6 text-center">
-      <div className="flex h-20 w-20 items-center justify-center rounded-full bg-primary-soft text-primary">
-        <PartyPopper size={40} />
-      </div>
-      <div>
-        <h1 className="text-2xl font-bold">Treino concluído!</h1>
-        <p className="mt-1 text-sm text-muted">
-          Você terminou &quot;{aula.nome}&quot; — {exercicios.length} exercícios registrados.
-          Mandou bem. 💪
-        </p>
-      </div>
-
-      <div className="grid w-full max-w-xs grid-cols-3 gap-2">
-        <div className="rounded-xl bg-neutral-soft p-3">
-          <Dumbbell size={16} className="mx-auto mb-1 text-primary" />
-          <p className="text-lg font-bold">{totalSeries}</p>
-          <p className="text-[11px] text-muted">séries</p>
+    <div className="flex min-h-dvh flex-col">
+      <div className="relative flex flex-col items-center gap-4 bg-primary px-6 pb-10 pt-6 text-center text-white">
+        <Link
+          href={`/treino/${aulaId}`}
+          className="absolute left-4 top-6 flex h-8 w-8 items-center justify-center rounded-full text-white/90 hover:bg-white/10"
+        >
+          <ChevronLeft size={20} />
+        </Link>
+        <div className="mt-6 flex h-20 w-20 items-center justify-center rounded-full bg-white text-primary">
+          <PartyPopper size={40} />
         </div>
-        <div className="rounded-xl bg-neutral-soft p-3">
-          <Clock size={16} className="mx-auto mb-1 text-primary" />
-          <p className="text-lg font-bold">{tempoMin || "—"}</p>
-          <p className="text-[11px] text-muted">minutos</p>
-        </div>
-        <div className={`rounded-xl p-3 ${recordes > 0 ? "bg-success-soft" : "bg-neutral-soft"}`}>
-          <Trophy size={16} className={`mx-auto mb-1 ${recordes > 0 ? "text-success" : "text-primary"}`} />
-          <p className="text-lg font-bold">{recordes}</p>
-          <p className="text-[11px] text-muted">{recordes === 1 ? "recorde" : "recordes"}</p>
+        <div>
+          <h1 className="text-xl font-extrabold uppercase tracking-wide">Treino concluído!</h1>
+          <p className="mt-1 text-lg font-semibold text-white/90">{aula.nome}</p>
         </div>
       </div>
 
-      <div className="flex w-full max-w-xs flex-col gap-3">
-        <ButtonLink href="/home" className="w-full">
-          Voltar para o início
-        </ButtonLink>
-        <ButtonLink href="/treino" variant="outline" className="w-full">
-          Ver meu treino
-        </ButtonLink>
+      <div className="flex flex-1 flex-col gap-6 px-6 py-6">
+        <div className="grid w-full grid-cols-3 gap-2">
+          <div className="rounded-xl bg-neutral-soft p-3 text-center">
+            <Dumbbell size={16} className="mx-auto mb-1 text-primary" />
+            <p className="text-lg font-bold">{exercicios.length}</p>
+            <p className="text-[11px] text-muted">exercícios</p>
+          </div>
+          <div className="rounded-xl bg-neutral-soft p-3 text-center">
+            <Trophy size={16} className="mx-auto mb-1 text-primary" />
+            <p className="text-lg font-bold">{totalSeries}</p>
+            <p className="text-[11px] text-muted">séries</p>
+          </div>
+          <div className="rounded-xl bg-neutral-soft p-3 text-center">
+            <Clock size={16} className="mx-auto mb-1 text-primary" />
+            <p className="text-lg font-bold">{tempoMin || "—"}</p>
+            <p className="text-[11px] text-muted">minutos</p>
+          </div>
+        </div>
+
+        {recordes > 0 && (
+          <div className="flex items-center justify-center gap-2 rounded-2xl bg-success-soft px-4 py-3 text-sm font-semibold text-success">
+            <Trophy size={18} />
+            {recordes} {recordes === 1 ? "recorde pessoal batido" : "recordes pessoais batidos"} hoje! 🎉
+          </div>
+        )}
+
+        {metaTotal > 0 && (
+          <div className="text-center">
+            <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted">Meta semanal</p>
+            <div className="flex justify-center gap-2">
+              {Array.from({ length: metaTotal }, (_, i) => i < metaConcluidas).map((feito, i) => (
+                <div
+                  key={i}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                    feito ? "bg-primary text-white" : "border-2 border-border text-border"
+                  }`}
+                >
+                  {feito && <Check size={16} strokeWidth={3} />}
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-xs text-muted">
+              {metaConcluidas} de {metaTotal} treinos
+            </p>
+          </div>
+        )}
+
+        <div className="mt-auto flex w-full flex-col gap-3">
+          <ButtonLink href="/home" className="w-full">
+            Voltar para o início
+          </ButtonLink>
+          <ButtonLink href="/treino" variant="outline" className="w-full">
+            Ver meu treino
+          </ButtonLink>
+        </div>
       </div>
     </div>
   );

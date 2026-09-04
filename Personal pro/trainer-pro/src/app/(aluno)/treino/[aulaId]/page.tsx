@@ -69,14 +69,27 @@ export default async function AulaPage({
     return { ...item, concluido };
   });
   const indiceAtual = itens.findIndex((i) => !i.concluido);
+  const concluidos = itens.filter((i) => i.concluido).length;
+  const pct = itens.length > 0 ? Math.round((concluidos / itens.length) * 100) : 0;
 
   return (
     <div>
       <TopBar title={aula.nome} back="/treino" action={inicioIso ? <TreinoTimer inicioIso={inicioIso} /> : undefined} />
+      <div className="space-y-2 p-4 pb-0">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-muted">{itens.length} exercícios</p>
+          <p className="text-xs font-semibold text-muted">
+            {concluidos} de {itens.length}
+          </p>
+        </div>
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-soft">
+          <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
+        </div>
+      </div>
       <div className="space-y-3 p-4">
         {itens.map(({ principal: ex, continuacao, concluido }, i) => (
           <Link key={ex.id} href={`/treino/${aulaId}/exercicio/${ex.id}`}>
-            <Card className={cn("flex items-center gap-3", i === indiceAtual && "border-2 border-primary")}>
+            <Card className={cn("flex items-center gap-3", i === indiceAtual && "border-primary bg-primary-soft")}>
               <div
                 className={cn(
                   "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold",

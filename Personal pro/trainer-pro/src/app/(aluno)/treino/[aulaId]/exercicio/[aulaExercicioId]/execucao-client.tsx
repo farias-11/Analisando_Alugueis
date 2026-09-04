@@ -8,7 +8,7 @@ import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 import { cn, parseDecimalBR } from "@/lib/utils";
-import { CheckCircle2, ChevronRight, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
 type Registro = AulaExercicio & { exercicio: Exercicio & { midias: ExercicioMidia[] }; aula: Aula };
@@ -595,6 +595,13 @@ export function ExecucaoClient({
                 ? "Finalizar série dos dois"
                 : "Finalizar série"}
           </Button>
+
+          {!todasAsSeriesFeitas && (
+            <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
+              <Clock size={13} />
+              Descanso: {formatarTempo((faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60)}
+            </p>
+          )}
 
           {!todasAsSeriesFeitas && !continuacao && (
             <Button onClick={finalizarTodas} disabled={pending} variant="outline" className="w-full">
