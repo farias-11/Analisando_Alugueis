@@ -4,6 +4,7 @@ import { getExerciciosDaAula, getCicloAtivo, getAulasDoCiclo, getAderenciaSemana
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
+import { ScrollFit } from "@/components/scroll-fit";
 import { Check, ChevronLeft, PartyPopper, Trophy, Dumbbell, Clock } from "lucide-react";
 
 export default async function TreinoConcluidoPage({
@@ -84,39 +85,39 @@ export default async function TreinoConcluidoPage({
   }
 
   return (
-    <div className="flex min-h-dvh flex-col">
-      <div className="relative flex flex-col items-center gap-4 bg-primary px-6 pb-10 pt-6 text-center text-white">
+    <div>
+      <div className="relative flex flex-col items-center gap-2 bg-primary px-6 pb-7 pt-6 text-center text-white">
         <Link
           href={`/treino/${aulaId}`}
-          className="absolute left-4 top-6 flex h-8 w-8 items-center justify-center rounded-full text-white/90 hover:bg-white/10"
+          className="absolute left-4 top-5 flex h-8 w-8 items-center justify-center rounded-full text-white/90 hover:bg-white/10"
         >
           <ChevronLeft size={20} />
         </Link>
-        <div className="mt-6 flex h-20 w-20 items-center justify-center rounded-full bg-white text-primary">
-          <PartyPopper size={40} />
+        <div className="mt-5 flex h-16 w-16 items-center justify-center rounded-full bg-white text-primary">
+          <PartyPopper size={32} />
         </div>
         <div>
           <h1 className="text-xl font-extrabold uppercase tracking-wide">Treino concluído!</h1>
-          <p className="mt-1 text-lg font-semibold text-white/90">{aula.nome}</p>
+          <p className="mt-1 text-base font-semibold text-white/90">{aula.nome}</p>
         </div>
       </div>
 
-      <div className="flex flex-1 flex-col gap-6 px-6 py-6">
-        <div className="grid w-full grid-cols-3 gap-2">
-          <div className="rounded-xl bg-neutral-soft p-3 text-center">
-            <Dumbbell size={16} className="mx-auto mb-1 text-primary" />
-            <p className="text-lg font-bold">{exercicios.length}</p>
-            <p className="text-[11px] text-muted">exercícios</p>
+      <ScrollFit rolar={false} className="flex flex-col gap-4 px-6 py-4">
+        <div className="grid w-full grid-cols-3 gap-3">
+          <div className="rounded-xl bg-neutral-soft p-4 text-center">
+            <Dumbbell size={18} className="mx-auto mb-1.5 text-primary" />
+            <p className="text-xl font-bold">{exercicios.length}</p>
+            <p className="text-xs text-muted">exercícios</p>
           </div>
-          <div className="rounded-xl bg-neutral-soft p-3 text-center">
-            <Trophy size={16} className="mx-auto mb-1 text-primary" />
-            <p className="text-lg font-bold">{totalSeries}</p>
-            <p className="text-[11px] text-muted">séries</p>
+          <div className="rounded-xl bg-neutral-soft p-4 text-center">
+            <Trophy size={18} className="mx-auto mb-1.5 text-primary" />
+            <p className="text-xl font-bold">{totalSeries}</p>
+            <p className="text-xs text-muted">séries</p>
           </div>
-          <div className="rounded-xl bg-neutral-soft p-3 text-center">
-            <Clock size={16} className="mx-auto mb-1 text-primary" />
-            <p className="text-lg font-bold">{tempoMin || "—"}</p>
-            <p className="text-[11px] text-muted">minutos</p>
+          <div className="rounded-xl bg-neutral-soft p-4 text-center">
+            <Clock size={18} className="mx-auto mb-1.5 text-primary" />
+            <p className="text-xl font-bold">{tempoMin || "—"}</p>
+            <p className="text-xs text-muted">minutos</p>
           </div>
         </div>
 
@@ -130,15 +131,15 @@ export default async function TreinoConcluidoPage({
         {metaTotal > 0 && (
           <div className="text-center">
             <p className="mb-2.5 text-xs font-semibold uppercase tracking-wide text-muted">Meta semanal</p>
-            <div className="flex justify-center gap-2">
+            <div className="flex justify-center gap-2.5">
               {Array.from({ length: metaTotal }, (_, i) => i < metaConcluidas).map((feito, i) => (
                 <div
                   key={i}
-                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ${
                     feito ? "bg-primary text-white" : "border-2 border-border text-border"
                   }`}
                 >
-                  {feito && <Check size={16} strokeWidth={3} />}
+                  {feito && <Check size={18} strokeWidth={3} />}
                 </div>
               ))}
             </div>
@@ -148,7 +149,7 @@ export default async function TreinoConcluidoPage({
           </div>
         )}
 
-        <div className="mt-auto flex w-full flex-col gap-3">
+        <div className="flex w-full flex-col gap-3">
           <ButtonLink href="/home" className="w-full">
             Voltar para o início
           </ButtonLink>
@@ -156,7 +157,7 @@ export default async function TreinoConcluidoPage({
             Ver meu treino
           </ButtonLink>
         </div>
-      </div>
+      </ScrollFit>
     </div>
   );
 }

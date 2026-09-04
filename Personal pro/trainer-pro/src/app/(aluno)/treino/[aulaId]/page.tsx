@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/nav/top-bar";
 import { TreinoTimer } from "@/components/treino-timer";
+import { ScrollFit } from "@/components/scroll-fit";
 import { Card } from "@/components/ui/card";
 import { CheckCircle2, ChevronRight, Flame, PlayCircle } from "lucide-react";
 import Link from "next/link";
@@ -86,48 +87,50 @@ export default async function AulaPage({
           <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${pct}%` }} />
         </div>
       </div>
-      <div className="space-y-3 p-4">
-        {itens.map(({ principal: ex, continuacao, concluido }, i) => (
-          <Link key={ex.id} href={`/treino/${aulaId}/exercicio/${ex.id}`}>
-            <Card className={cn("flex items-center gap-3", i === indiceAtual && "border-primary bg-primary-soft")}>
-              <div
-                className={cn(
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
-                  concluido ? "bg-success-soft text-success" : "bg-primary-soft text-primary-dark"
+      <ScrollFit className="p-4">
+        <div className="space-y-3">
+          {itens.map(({ principal: ex, continuacao, concluido }, i) => (
+            <Link key={ex.id} href={`/treino/${aulaId}/exercicio/${ex.id}`}>
+              <Card className={cn("flex items-center gap-3", i === indiceAtual && "border-primary bg-primary-soft")}>
+                <div
+                  className={cn(
+                    "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-sm font-semibold",
+                    concluido ? "bg-success-soft text-success" : "bg-primary-soft text-primary-dark"
+                  )}
+                >
+                  {concluido ? <CheckCircle2 size={18} /> : i + 1}
+                </div>
+                <div className="flex-1">
+                  <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
+                    {ex.exercicio.nome}
+                    {ex.eh_aquecimento && (
+                      <span className="flex items-center gap-0.5 rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                        <Flame size={10} /> Aquecimento
+                      </span>
+                    )}
+                    {i === indiceAtual && !concluido && (
+                      <span className="rounded-pill bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary-dark">
+                        Você está aqui
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-xs text-muted">
+                    {continuacao
+                      ? `${continuacao.series}x ${continuacao.repeticoes} · +${ex.series} de aquecimento`
+                      : `${ex.series}x ${ex.repeticoes}${ex.carga_inicial ? ` · ${ex.carga_inicial}kg` : ""}`}
+                  </p>
+                </div>
+                {concluido ? (
+                  <CheckCircle2 className="text-success" size={22} />
+                ) : (
+                  <PlayCircle className="text-primary" size={22} />
                 )}
-              >
-                {concluido ? <CheckCircle2 size={18} /> : i + 1}
-              </div>
-              <div className="flex-1">
-                <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
-                  {ex.exercicio.nome}
-                  {ex.eh_aquecimento && (
-                    <span className="flex items-center gap-0.5 rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                      <Flame size={10} /> Aquecimento
-                    </span>
-                  )}
-                  {i === indiceAtual && !concluido && (
-                    <span className="rounded-pill bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary-dark">
-                      Você está aqui
-                    </span>
-                  )}
-                </p>
-                <p className="text-xs text-muted">
-                  {continuacao
-                    ? `${continuacao.series}x ${continuacao.repeticoes} · +${ex.series} de aquecimento`
-                    : `${ex.series}x ${ex.repeticoes}${ex.carga_inicial ? ` · ${ex.carga_inicial}kg` : ""}`}
-                </p>
-              </div>
-              {concluido ? (
-                <CheckCircle2 className="text-success" size={22} />
-              ) : (
-                <PlayCircle className="text-primary" size={22} />
-              )}
-              <ChevronRight className="text-muted-2" size={18} />
-            </Card>
-          </Link>
-        ))}
-      </div>
+                <ChevronRight className="text-muted-2" size={18} />
+              </Card>
+            </Link>
+          ))}
+        </div>
+      </ScrollFit>
     </div>
   );
 }

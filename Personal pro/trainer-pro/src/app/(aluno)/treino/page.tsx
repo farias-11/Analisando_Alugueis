@@ -2,6 +2,7 @@ import { requireAluno } from "@/lib/data/current-user";
 import { getAulasDoCiclo, getCicloAtivo, aulaDoDia, getExerciciosDaAula } from "@/lib/data/aluno";
 import { createClient } from "@/lib/supabase/server";
 import { TopBar } from "@/components/nav/top-bar";
+import { ScrollFit } from "@/components/scroll-fit";
 import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -78,22 +79,22 @@ export default async function TreinoDoDiaPage() {
   return (
     <div>
       <TopBar title="Treino" />
-      <div className="space-y-5 p-4 pr-14">
+      <div className="space-y-4 p-4 pb-2 pr-14">
         <p className="text-xs font-medium uppercase tracking-wide text-muted">
           Ciclo atual · {ciclo.duracao_semanas} semanas
         </p>
 
         {aulaHoje ? (
           <Link href={`/treino/${aulaHoje.id}`}>
-            <Card className="relative flex flex-col bg-primary text-white">
-              <Dumbbell size={22} strokeWidth={1.75} className="absolute right-4 top-4 text-white/35" />
+            <Card className="relative flex flex-col bg-primary p-6 text-white">
+              <Dumbbell size={26} strokeWidth={1.75} className="absolute right-5 top-5 text-white/35" />
               <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Treino de hoje</p>
-              <p className="mt-1 max-w-[85%] text-xl font-extrabold leading-tight">{aulaHoje.nome}</p>
-              <p className="mt-0.5 text-xs text-white/80">
+              <p className="mt-1.5 max-w-[85%] text-2xl font-extrabold leading-tight">{aulaHoje.nome}</p>
+              <p className="mt-1 text-sm text-white/80">
                 {totalExerciciosHoje} exercícios
                 {aulaHoje.duracao_estimada_min ? ` · ~${aulaHoje.duracao_estimada_min} min` : ""}
               </p>
-              <div className="mt-3 w-full rounded-2xl bg-white py-3 text-center text-sm font-semibold text-primary-dark">
+              <div className="mt-4 w-full rounded-2xl bg-white py-3.5 text-center text-sm font-semibold text-primary-dark">
                 Começar treino
               </div>
             </Card>
@@ -105,50 +106,51 @@ export default async function TreinoDoDiaPage() {
           </Card>
         )}
 
-        <div>
-          <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted">Esta semana</p>
-          <div className="space-y-2">
-            {aulasComStatus.map(({ aula, totalExercicios, concluidaNaSemana }) => {
-              const destaque = aulaHoje?.id === aula.id;
-              const diaLabel =
-                aula.dias_semana && aula.dias_semana.length > 0
-                  ? aula.dias_semana
-                      .slice()
-                      .sort()
-                      .map((d) => NOMES_DIAS[d])
-                      .join("/")
-                  : null;
-              return (
-                <Link key={aula.id} href={`/treino/${aula.id}`}>
-                  <Card
-                    className={cn(
-                      "flex items-center justify-between gap-3",
-                      destaque && "border-primary bg-primary-soft"
-                    )}
-                  >
-                    <div>
-                      <p className="text-sm font-semibold">{aula.nome}</p>
-                      <p className="text-xs text-muted">
-                        {totalExercicios} exercícios
-                        {aula.duracao_estimada_min ? ` · ~${aula.duracao_estimada_min} min` : ""}
-                      </p>
-                    </div>
-                    {concluidaNaSemana ? (
-                      <CheckCircle2 className="shrink-0 text-success" size={20} />
-                    ) : destaque ? (
-                      <Pill tone="primary" className="shrink-0">
-                        Hoje
-                      </Pill>
-                    ) : diaLabel ? (
-                      <span className="shrink-0 text-xs font-medium capitalize text-muted-2">{diaLabel}</span>
-                    ) : null}
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Esta semana</p>
       </div>
+
+      <ScrollFit rolar={false} topo className="px-4 pb-4 pr-[3.25rem]">
+        <div className="space-y-2">
+          {aulasComStatus.map(({ aula, totalExercicios, concluidaNaSemana }) => {
+            const destaque = aulaHoje?.id === aula.id;
+            const diaLabel =
+              aula.dias_semana && aula.dias_semana.length > 0
+                ? aula.dias_semana
+                    .slice()
+                    .sort()
+                    .map((d) => NOMES_DIAS[d])
+                    .join("/")
+                : null;
+            return (
+              <Link key={aula.id} href={`/treino/${aula.id}`}>
+                <Card
+                  className={cn(
+                    "flex items-center justify-between gap-3",
+                    destaque && "border-primary bg-primary-soft"
+                  )}
+                >
+                  <div>
+                    <p className="text-sm font-semibold">{aula.nome}</p>
+                    <p className="text-xs text-muted">
+                      {totalExercicios} exercícios
+                      {aula.duracao_estimada_min ? ` · ~${aula.duracao_estimada_min} min` : ""}
+                    </p>
+                  </div>
+                  {concluidaNaSemana ? (
+                    <CheckCircle2 className="shrink-0 text-success" size={20} />
+                  ) : destaque ? (
+                    <Pill tone="primary" className="shrink-0">
+                      Hoje
+                    </Pill>
+                  ) : diaLabel ? (
+                    <span className="shrink-0 text-xs font-medium capitalize text-muted-2">{diaLabel}</span>
+                  ) : null}
+                </Card>
+              </Link>
+            );
+          })}
+        </div>
+      </ScrollFit>
     </div>
   );
 }

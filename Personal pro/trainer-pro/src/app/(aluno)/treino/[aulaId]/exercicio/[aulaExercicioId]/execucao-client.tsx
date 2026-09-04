@@ -6,6 +6,7 @@ import Link from "next/link";
 import { registrarSerie, registrarTodasAsSeries } from "@/app/actions/execucoes";
 import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
+import { ScrollFit } from "@/components/scroll-fit";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 import { cn, parseDecimalBR } from "@/lib/utils";
 import { CheckCircle2, ChevronRight, Clock, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
@@ -363,7 +364,7 @@ export function ExecucaoClient({
   const marcaAtualParaBadge = continuacao ? ultimaMarcaContinuacao : ultimaMarca;
 
   return (
-    <div className="space-y-4 p-4">
+    <ScrollFit rolar={false} className="space-y-1 p-3">
       {descansoAberto && (
         <TimerDescanso
           duracaoSeg={(faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60}
@@ -376,27 +377,32 @@ export function ExecucaoClient({
         />
       )}
 
-      <div className="overflow-hidden rounded-card bg-black">
+      {/* Altura fixa (não aspect-video puro) — junto com tabs, pills, inputs
+          e botões, o vídeo em 16:9 largura-cheia não deixava a tela caber
+          sem rolar (mesmo objetivo da Home, ver viewport-fit.tsx). O vídeo
+          continua sempre visível e com controles completos, só não domina
+          mais a tela inteira. */}
+      <div className="h-[94px] w-full overflow-hidden rounded-card bg-black">
         {embedUrl ? (
           <iframe
             src={embedUrl}
-            className="aspect-video w-full"
+            className="h-full w-full"
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
         ) : primeiraMidiaUpload ? (
           primeiraMidiaUpload.tipo === "video" ? (
-            <video src={primeiraMidiaUpload.url} controls className="aspect-video w-full" />
+            <video src={primeiraMidiaUpload.url} controls className="h-full w-full object-cover" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={primeiraMidiaUpload.url}
               alt={aulaExercicio.exercicio.nome}
-              className="aspect-video w-full object-cover"
+              className="h-full w-full object-cover"
             />
           )
         ) : (
-          <div className="flex aspect-video w-full items-center justify-center text-sm text-white/60">
+          <div className="flex h-full w-full items-center justify-center text-sm text-white/60">
             Sem mídia cadastrada
           </div>
         )}
@@ -430,7 +436,7 @@ export function ExecucaoClient({
             key={t}
             onClick={() => setTab(t)}
             className={cn(
-              "shrink-0 border-b-2 px-3 py-2 text-sm font-medium",
+              "shrink-0 border-b-2 px-3 py-1 text-sm font-medium",
               tab === t ? "border-primary text-primary" : "border-transparent text-muted"
             )}
           >
@@ -439,7 +445,7 @@ export function ExecucaoClient({
         ))}
       </div>
 
-      <div className="min-h-16 text-sm text-foreground/90">
+      <div className="min-h-8 text-sm text-foreground/90">
         {tab === "Geral" && (
           <p>
             {aulaExercicio.tipo === "cardio"
@@ -495,7 +501,7 @@ export function ExecucaoClient({
       ) : (
         <>
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">
+            <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
               Série {todasAsSeriesFeitas ? "· toque para editar uma série já feita" : ""}
             </p>
             <div className="flex flex-wrap gap-2">
@@ -506,7 +512,7 @@ export function ExecucaoClient({
                     key={n}
                     onClick={() => irParaSerie(n, valoresPorSerie)}
                     className={cn(
-                      "flex h-11 w-11 items-center justify-center gap-0.5 rounded-xl border text-sm font-semibold",
+                      "flex h-9 w-9 items-center justify-center gap-0.5 rounded-xl border text-sm font-semibold",
                       serieAtual === n
                         ? "border-primary bg-primary text-white"
                         : seriesFeitas.includes(n)
@@ -539,7 +545,7 @@ export function ExecucaoClient({
                 type="number"
                 value={reps}
                 onChange={(e) => setReps(e.target.value)}
-                className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
               />
             </div>
             <div>
@@ -549,7 +555,7 @@ export function ExecucaoClient({
                 inputMode="decimal"
                 value={carga}
                 onChange={(e) => setCarga(e.target.value)}
-                className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
               />
             </div>
           </div>
@@ -571,7 +577,7 @@ export function ExecucaoClient({
                     type="number"
                     value={repsParceiro}
                     onChange={(e) => setRepsParceiro(e.target.value)}
-                    className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                    className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
                   />
                 </div>
                 <div>
@@ -581,7 +587,7 @@ export function ExecucaoClient({
                     inputMode="decimal"
                     value={cargaParceiro}
                     onChange={(e) => setCargaParceiro(e.target.value)}
-                    className="h-12 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                    className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
                   />
                 </div>
               </div>
@@ -604,20 +610,20 @@ export function ExecucaoClient({
           )}
 
           {!todasAsSeriesFeitas && !continuacao && (
-            <Button onClick={finalizarTodas} disabled={pending} variant="outline" className="w-full">
+            <Button onClick={finalizarTodas} disabled={pending} variant="outline" size="sm" className="w-full">
               Finalizar todas as séries
             </Button>
           )}
 
           {todasAsSeriesFeitas && (
             <>
-              <div className="flex items-center gap-2 rounded-2xl bg-success-soft px-4 py-3 text-sm font-semibold text-success">
+              <div className="flex items-center gap-2 rounded-2xl bg-success-soft px-4 py-2 text-sm font-semibold text-success">
                 <CheckCircle2 size={18} />
                 Exercício concluído!
               </div>
               <Link
                 href={proximoHref}
-                className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-dark"
+                className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
               >
                 {ehUltimoExercicio ? "Finalizar treino" : "Próximo exercício"}
                 <ChevronRight size={18} />
@@ -629,13 +635,13 @@ export function ExecucaoClient({
               não escondido atrás de menu (correção de design confirmada). */}
           <Link
             href={relatarDorHref}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-2.5 text-sm font-semibold text-danger"
           >
             <HeartCrack size={18} />
             Relatar dor/desconforto
           </Link>
         </>
       )}
-    </div>
+    </ScrollFit>
   );
 }
