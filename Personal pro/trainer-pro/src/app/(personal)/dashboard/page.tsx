@@ -3,7 +3,7 @@ import { getDashboardData, PERIODOS, type Periodo } from "@/lib/data/dashboard";
 import { pedirAtualizacao } from "@/app/actions/alunos";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
-import { formatMoedaBR } from "@/lib/status";
+import { formatMoedaBR, saudacaoPorHorario } from "@/lib/status";
 import {
   ArrowUp,
   ArrowDown,
@@ -76,9 +76,7 @@ export default async function DashboardPage({
   const data = await getDashboardData(personal.id, periodo);
   const { radar, radarTotal, ciclosVencendo, destaquesEvolucao, financeiroPeriodo, kpis } = data;
   const primeiroNome = personal.nome.split(" ")[0];
-  const horaServidor = new Date().getHours();
-  // boa noite 18h-00h59, bom dia 01h-11h59, boa tarde 12h-17h59
-  const saudacao = horaServidor >= 18 || horaServidor < 1 ? "Boa noite" : horaServidor < 12 ? "Bom dia" : "Boa tarde";
+  const saudacao = saudacaoPorHorario();
 
   return (
     <div className="space-y-5 p-4 md:p-0">

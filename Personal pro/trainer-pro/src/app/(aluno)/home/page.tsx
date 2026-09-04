@@ -8,7 +8,7 @@ import {
 } from "@/lib/data/aluno";
 import { getResumoEvolucao, type ResumoEvolucao } from "@/lib/data/evolucao";
 import { getGraficoPeso } from "@/lib/data/graficos";
-import { corTendencia } from "@/lib/status";
+import { corTendencia, saudacaoPorHorario } from "@/lib/status";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { SetaTendencia } from "@/components/evolution-summary";
@@ -118,9 +118,7 @@ export default async function HomePage() {
   const jaFezHoje = aulaHoje ? await aulaConcluidaHoje(aluno.id, aulaHoje.id) : false;
 
   const primeiroNome = aluno.nome.split(" ")[0];
-  const horaServidor = new Date().getHours();
-  // boa noite 18h-00h59, bom dia 01h-11h59, boa tarde 12h-17h59
-  const saudacao = horaServidor >= 18 || horaServidor < 1 ? "Boa noite" : horaServidor < 12 ? "Bom dia" : "Boa tarde";
+  const saudacao = saudacaoPorHorario();
   const pesoAtual = pesoChart.length ? pesoChart[pesoChart.length - 1].valor : null;
   const fechamento = mensagemFechamento(concluidas, meta, resumo);
 

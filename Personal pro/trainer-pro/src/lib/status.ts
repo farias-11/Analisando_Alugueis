@@ -25,6 +25,24 @@ export function diasDesde(data: string | null): number | null {
   return Math.floor((now.getTime() - then.getTime()) / 86_400_000);
 }
 
+/** "Bom dia"/"Boa tarde"/"Boa noite" sempre no horário de Brasília, não no
+ * fuso do servidor — a Vercel roda em UTC, então usar new Date().getHours()
+ * direto dava saudação errada (3h adiantada) pra quem tá no Brasil o dia
+ * inteiro. Boa noite 18h-00h59, bom dia 01h-11h59, boa tarde 12h-17h59. */
+export function saudacaoPorHorario(): "Bom dia" | "Boa tarde" | "Boa noite" {
+  const hora = Number(
+    new Intl.DateTimeFormat("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      hour12: false,
+    }).format(new Date())
+  ) % 24; // Intl às vezes devolve "24" pra meia-noite em vez de "00"
+
+  if (hora >= 18 || hora < 1) return "Boa noite";
+  if (hora < 12) return "Bom dia";
+  return "Boa tarde";
+}
+
 export type Tendencia = "positiva" | "neutra" | "negativa";
 
 export function corTendencia(t: Tendencia) {
