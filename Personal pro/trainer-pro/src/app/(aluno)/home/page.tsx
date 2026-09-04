@@ -6,7 +6,7 @@ import {
   aulaDoDia,
   aulaConcluidaHoje,
 } from "@/lib/data/aluno";
-import { getResumoEvolucao } from "@/lib/data/evolucao";
+import { getResumoEvolucao, type ResumoEvolucao } from "@/lib/data/evolucao";
 import { getGraficoPeso } from "@/lib/data/graficos";
 import { corTendencia } from "@/lib/status";
 import { Card, CardTitle } from "@/components/ui/card";
@@ -24,12 +24,39 @@ function legendaMetaSemanal(concluidas: number, meta: number): string {
   return "Ainda dá tempo de bater a meta.";
 }
 
-// mesma régua da meta semanal alimenta o card de fechamento — só troca a
-// prioridade quando faz tempo que o aluno não treina de verdade (handoff 2.5)
-function mensagemFechamento(concluidas: number, meta: number, diasDesdeUltimoTreino: number | null): string {
-  if (meta > 0 && concluidas >= meta) return "Você completou sua semana de treinos. Continue assim! 💪";
-  if (diasDesdeUltimoTreino !== null && diasDesdeUltimoTreino >= 7) return "Faz um tempo que você não treina — que tal hoje?";
-  return "Você está evoluindo! Continue assim.";
+// Card de fechamento: uma frase por situação real do aluno, não uma genérica
+// fixa — usa só o que o resumo de evolução já calcula (nada de dado novo).
+// Ordem é prioridade: casos mais específicos/acionáveis primeiro, cai pro
+// genérico só quando nada de notável está acontecendo. Reaproveita os mesmos
+// limiares já usados em cargaTendencia/aderenciaTendencia (evolucao.ts) em
+// vez de inventar números novos, pra não ter dois critérios divergentes pro
+// mesmo dado.
+function mensagemFechamento(
+  concluidas: number,
+  meta: number,
+  resumo: ResumoEvolucao
+): { emoji: string; texto: string } {
+  const { diasDesdeUltimoTreino, cargaTendencia, aderenciaTendencia } = resumo;
+
+  if (diasDesdeUltimoTreino === null) {
+    return { emoji: "🚀", texto: "Ainda não vimos seu primeiro treino por aqui — bora começar?" };
+  }
+  if (diasDesdeUltimoTreino >= 7) {
+    return { emoji: "😴", texto: "Faz tempo que você não treina — que tal hoje?" };
+  }
+  if (meta > 0 && concluidas >= meta) {
+    return { emoji: "💪", texto: "Você completou sua semana de treinos. Continue assim!" };
+  }
+  if (cargaTendencia === "positiva") {
+    return { emoji: "🔥", texto: "Sua carga está subindo — o esforço está valendo a pena!" };
+  }
+  if (cargaTendencia === "negativa") {
+    return { emoji: "📉", texto: "Sua carga caiu um pouco — vale ajustar o descanso." };
+  }
+  if (aderenciaTendencia === "negativa") {
+    return { emoji: "⏳", texto: "Essa semana ainda não decolou — dá pra recuperar o ritmo." };
+  }
+  return { emoji: "👍", texto: "Você está evoluindo! Continue assim." };
 }
 
 function qualificarAderencia(pct: number): string {
@@ -60,6 +87,7 @@ export default async function HomePage() {
   const horaServidor = new Date().getHours();
   const saudacao = horaServidor < 12 ? "Bom dia" : horaServidor < 18 ? "Boa tarde" : "Boa noite";
   const pesoAtual = pesoChart.length ? pesoChart[pesoChart.length - 1].valor : null;
+  const fechamento = mensagemFechamento(concluidas, meta, resumo);
 
   return (
     // altura fixa = 100dvh menos o pb-24 (6rem) que o layout do aluno reserva
@@ -179,8 +207,8 @@ export default async function HomePage() {
 
       <Card className="shrink-0 bg-primary-soft p-3">
         <p className="flex items-start gap-2 text-xs font-medium leading-snug text-foreground">
-          <span>🔥</span>
-          {mensagemFechamento(concluidas, meta, resumo.diasDesdeUltimoTreino)}
+          <span>{fechamento.emoji}</span>
+          {fechamento.texto}
         </p>
       </Card>
     </div>
