@@ -364,7 +364,7 @@ export function ExecucaoClient({
   const marcaAtualParaBadge = continuacao ? ultimaMarcaContinuacao : ultimaMarca;
 
   return (
-    <ScrollFit rolar={false} className="space-y-1.5 p-3">
+    <ScrollFit rolar={false} className="space-y-1 p-2 [&>*]:shrink-0">
       {descansoAberto && (
         <TimerDescanso
           duracaoSeg={(faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60}
@@ -382,7 +382,7 @@ export function ExecucaoClient({
           sem rolar (mesmo objetivo da Home, ver viewport-fit.tsx). O vídeo
           continua sempre visível e com controles completos, só não domina
           mais a tela inteira. */}
-      <div className="h-[300px] w-full shrink-0 overflow-hidden rounded-card bg-black">
+      <div className="h-[130px] w-full shrink-0 overflow-hidden rounded-card bg-black">
         {embedUrl ? (
           <iframe
             src={embedUrl}
@@ -445,7 +445,7 @@ export function ExecucaoClient({
         ))}
       </div>
 
-      <div className="min-h-8 text-sm text-foreground/90">
+      <div className="min-h-6 text-sm text-foreground/90">
         {tab === "Geral" && (
           <p>
             {aulaExercicio.tipo === "cardio"
@@ -477,13 +477,13 @@ export function ExecucaoClient({
           </Button>
           {todasAsSeriesFeitas && (
             <>
-              <div className="flex items-center gap-2 rounded-2xl bg-success-soft px-4 py-3 text-sm font-semibold text-success">
+              <div className="flex items-center gap-2 rounded-2xl bg-success-soft px-4 py-2 text-sm font-semibold text-success">
                 <CheckCircle2 size={18} />
                 Exercício concluído!
               </div>
               <Link
                 href={proximoHref}
-                className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-primary px-4 py-3 text-sm font-semibold text-white hover:bg-primary-dark"
+                className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
               >
                 {ehUltimoExercicio ? "Finalizar treino" : "Próximo exercício"}
                 <ChevronRight size={18} />
@@ -492,7 +492,7 @@ export function ExecucaoClient({
           )}
           <Link
             href={relatarDorHref}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-3 text-sm font-semibold text-danger"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-2.5 text-sm font-semibold text-danger"
           >
             <HeartCrack size={18} />
             Relatar dor/desconforto
@@ -512,7 +512,7 @@ export function ExecucaoClient({
                     key={n}
                     onClick={() => irParaSerie(n, valoresPorSerie)}
                     className={cn(
-                      "flex h-9 w-9 items-center justify-center gap-0.5 rounded-xl border text-sm font-semibold",
+                      "flex h-10 w-10 shrink-0 items-center justify-center gap-0.5 rounded-xl border text-sm font-semibold",
                       serieAtual === n
                         ? "border-primary bg-primary text-white"
                         : seriesFeitas.includes(n)
@@ -538,14 +538,14 @@ export function ExecucaoClient({
               <MarcaMaxima marca={faseAtual.ehAquecimento ? ultimaMarca : marcaAtualParaBadge} />
             )}
           </p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
               <input
                 type="number"
                 value={reps}
                 onChange={(e) => setReps(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
               />
             </div>
             <div>
@@ -555,7 +555,7 @@ export function ExecucaoClient({
                 inputMode="decimal"
                 value={carga}
                 onChange={(e) => setCarga(e.target.value)}
-                className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
               />
             </div>
           </div>
@@ -570,14 +570,14 @@ export function ExecucaoClient({
                   <MarcaMaxima marca={ultimaMarcaParceiro} />
                 )}
               </p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
                   <input
                     type="number"
                     value={repsParceiro}
                     onChange={(e) => setRepsParceiro(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                    className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
                   />
                 </div>
                 <div>
@@ -587,7 +587,7 @@ export function ExecucaoClient({
                     inputMode="decimal"
                     value={cargaParceiro}
                     onChange={(e) => setCargaParceiro(e.target.value)}
-                    className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                    className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
                   />
                 </div>
               </div>
@@ -610,7 +610,7 @@ export function ExecucaoClient({
           )}
 
           {!todasAsSeriesFeitas && !continuacao && (
-            <Button onClick={finalizarTodas} disabled={pending} variant="outline" size="sm" className="w-full">
+            <Button onClick={finalizarTodas} disabled={pending} variant="outline" className="w-full">
               Finalizar todas as séries
             </Button>
           )}

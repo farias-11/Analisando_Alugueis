@@ -102,7 +102,7 @@ export default async function TreinoConcluidoPage({
         </div>
       </div>
 
-      <ScrollFit rolar={false} className="flex flex-col gap-4 px-6 py-4">
+      <ScrollFit rolar={false} className="flex flex-col gap-4 px-6 py-4 [&>*]:shrink-0">
         <div className="grid w-full grid-cols-3 gap-3">
           <div className="rounded-xl bg-neutral-soft p-4 text-center">
             <Dumbbell size={18} className="mx-auto mb-1.5 text-primary" />
