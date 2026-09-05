@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
 // Mesma técnica de medição da Home (ver (aluno)/home/viewport-fit.tsx pro
@@ -91,7 +91,7 @@ export function ScrollFit({
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     // Desktop/paisagem curta: nada de altura forçada, a página rola normal
     // (mesmo critério da Home — não existe BottomNav fixa pra medir contra).
     if (desktop) return;
@@ -164,30 +164,30 @@ export function ScrollFit({
       }
     }
 
-    // Medir ANTES da fonte customizada carregar era o motivo de um flash real
-    // (bug visto aqui): com a fonte de fallback (mais estreita/mais baixa), o
-    // texto cabia numa escala generosa; assim que a fonte de verdade chegava
-    // (pouco depois), o mesmo texto ficava maior, estourava, e a tela toda
-    // encolhia de repente pra escala correta — visível pro aluno como "abre
-    // grande e diminui sozinho". `document.fonts.ready` garante que mesmo essa
-    // PRIMEIRA medição já usa as métricas finais da fonte.
+    // SÍNCRONO, dentro de useLayoutEffect — roda depois do DOM ser montado
+    // mas ANTES do navegador pintar a tela. Sem isso (um useEffect comum, ou
+    // qualquer await antes da 1ª medição), o navegador chegava a pintar o
+    // estado "sem altura ainda" (fluxo natural, sem overflow-hidden nem
+    // escala nenhuma aplicada) por um frame — e ISSO que aparecia como "a
+    // tela abre grande e ajusta sozinha", principalmente em navegação
+    // client-side (trocar de tela dentro do app, ex: entrar num exercício),
+    // que já não tem o tempo de carregamento de página pra "esconder" esse
+    // frame. Rodar medir() já aqui, síncrono, faz o PRIMEIRO frame pintado
+    // já sair do tamanho certo.
+    medir();
+
+    // A fonte customizada pode ainda não ter carregado no instante do medir()
+    // síncrono acima (raro fora do primeiro carregamento frio da página) —
+    // reconfere assim que ela terminar de carregar. Em navegação client-side
+    // (fonte já carregada há muito) isso não muda nada visível; só serve de
+    // rede de segurança pro carregamento inicial.
     let cancelado = false;
-    async function medirDepoisDaFonte() {
-      if (typeof document !== "undefined" && document.fonts?.ready) {
-        try {
-          // Corrida com um teto de 150ms — cobre o caso comum (fonte já em
-          // cache, resolve quase na hora) sem arriscar deixar o conteúdo
-          // sem tamanho nenhum por muito tempo se a fonte demorar de verdade
-          // (rede lenta): nesse caso pior, ainda sobra a reconfirmação de
-          // 350ms/1200ms mais abaixo pra corrigir.
-          await Promise.race([document.fonts.ready, new Promise((resolve) => setTimeout(resolve, 150))]);
-        } catch {
-          // segue sem esperar se isso falhar por qualquer motivo
-        }
-      }
-      if (!cancelado) medir();
+    if (typeof document !== "undefined" && document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        if (!cancelado) medir();
+      });
     }
-    medirDepoisDaFonte();
+
     // Reconfirma um pouco depois do mount — vídeo/iframe (YouTube, mídia
     // enviada) carrega de forma assíncrona e pode crescer DEPOIS da
     // primeira medição, sem disparar resize nenhum.
