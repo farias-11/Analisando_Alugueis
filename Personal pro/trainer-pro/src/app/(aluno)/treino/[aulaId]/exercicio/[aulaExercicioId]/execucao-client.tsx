@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollFit } from "@/components/scroll-fit";
 import { youtubeEmbedUrl } from "@/lib/youtube";
 import { cn, parseDecimalBR } from "@/lib/utils";
-import { CheckCircle2, ChevronRight, Clock, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
 type Registro = AulaExercicio & { exercicio: Exercicio & { midias: ExercicioMidia[] }; aula: Aula };
@@ -25,17 +25,34 @@ function formatarTempo(segundos: number) {
 }
 
 function TimerDescanso({ duracaoSeg, onFim }: { duracaoSeg: number; onFim: () => void }) {
+  // Baseado em relógio de verdade (fim = agora + duração), não num contador
+  // que desconta 1s por setTimeout — o navegador pausa/atrasa timers quando a
+  // tela é bloqueada ou o app fica muito tempo em segundo plano, então um
+  // contador ia parar de contar exatamente quando isso acontece (bug grave:
+  // o descanso "trava" e nunca acaba). Recalculando a partir de Date.now() a
+  // cada tick — e de novo assim que a aba volta a ficar visível — o tempo
+  // restante sempre reflete o tempo real que passou, mesmo se o timer em si
+  // ficou horas sem rodar.
+  // useState com função (não useRef com valor direto) porque Date.now() é
+  // impuro — só é seguro chamar assim dentro do inicializador "preguiçoso"
+  // do useState, que o React garante rodar uma única vez.
+  const [fimEm] = useState(() => Date.now() + duracaoSeg * 1000);
   const [restante, setRestante] = useState(duracaoSeg);
 
   useEffect(() => {
-    if (restante <= 0) {
-      onFim();
-      return;
+    function recalcular() {
+      const restanteAgora = Math.max(0, Math.ceil((fimEm - Date.now()) / 1000));
+      setRestante(restanteAgora);
+      if (restanteAgora <= 0) onFim();
     }
-    const id = setTimeout(() => setRestante((s) => s - 1), 1000);
-    return () => clearTimeout(id);
+    const id = setInterval(recalcular, 1000);
+    document.addEventListener("visibilitychange", recalcular);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", recalcular);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [restante]);
+  }, []);
 
   const progresso = 1 - restante / duracaoSeg;
 
@@ -98,6 +115,7 @@ export function ExecucaoClient({
   execucoesDeHoje,
   proximoExercicioId,
   ehUltimoExercicio,
+  treinoTotalmenteConcluido,
   parceiro,
   ultimaMarcaParceiro,
   execucoesDeHojeParceiro,
@@ -111,6 +129,11 @@ export function ExecucaoClient({
   execucoesDeHoje: Record<number, ValorSerie>;
   proximoExercicioId: string | null;
   ehUltimoExercicio: boolean;
+  /** ehUltimoExercicio é só posição na lista — se o aluno pulou exercícios e
+   * veio direto pro último, terminá-lo não quer dizer que o treino inteiro
+   * acabou. Só quando isso também é true o "Finalizar treino" vai pra tela
+   * de parabéns; senão volta pra lista, onde ainda sobra exercício pendente. */
+  treinoTotalmenteConcluido: boolean;
   parceiro?: Registro | null;
   ultimaMarcaParceiro?: Marca;
   execucoesDeHojeParceiro?: Record<number, ValorSerie>;
@@ -355,16 +378,22 @@ export function ExecucaoClient({
   )}&aulaNome=${encodeURIComponent(aulaExercicio.aula.nome)}`;
 
   const todasAsSeriesFeitas = seriesFeitas.length >= totalSeries;
-  const proximoHref = ehUltimoExercicio
+  const indoParaConclusao = ehUltimoExercicio && treinoTotalmenteConcluido;
+  const proximoHref = indoParaConclusao
     ? `/treino/${aulaId}/concluido`
     : proximoExercicioId
       ? `/treino/${aulaId}/exercicio/${proximoExercicioId}`
       : `/treino/${aulaId}`;
+  const proximoLabel = indoParaConclusao
+    ? "Finalizar treino"
+    : proximoExercicioId
+      ? "Próximo exercício"
+      : "Ver exercícios pendentes";
 
   const marcaAtualParaBadge = continuacao ? ultimaMarcaContinuacao : ultimaMarca;
 
   return (
-    <ScrollFit rolar={false} className="space-y-1 p-2 [&>*]:shrink-0">
+    <ScrollFit rolar={false} className="space-y-[var(--sf-gap)] p-[var(--sf-pad)] [&>*]:shrink-0">
       {descansoAberto && (
         <TimerDescanso
           duracaoSeg={(faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60}
@@ -382,7 +411,7 @@ export function ExecucaoClient({
           sem rolar (mesmo objetivo da Home, ver viewport-fit.tsx). O vídeo
           continua sempre visível e com controles completos, só não domina
           mais a tela inteira. */}
-      <div className="h-[130px] w-full shrink-0 overflow-hidden rounded-card bg-black">
+      <div className="aspect-video max-h-[var(--sf-media-h,220px)] w-full shrink-0 overflow-hidden rounded-card bg-black">
         {embedUrl ? (
           <iframe
             src={embedUrl}
@@ -408,27 +437,14 @@ export function ExecucaoClient({
         )}
       </div>
 
-      {parceiro && (
-        <div className="flex items-center gap-1.5 rounded-xl bg-primary-soft px-3.5 py-2.5 text-sm font-medium text-primary-dark">
-          <Link2 size={16} /> Bi-set com {parceiro.exercicio.nome} — faça os dois sem descanso entre eles, depois
-          descanse.
-        </div>
-      )}
-
       {pendentesOffline > 0 && (
-        <div className="flex items-center gap-2 rounded-xl bg-warning-soft px-3.5 py-2.5 text-sm text-warning">
+        <div className="flex items-center gap-2 rounded-xl bg-warning-soft px-3 py-2 text-xs text-warning">
           <WifiOff size={16} />
           {pendentesOffline} registro{pendentesOffline > 1 ? "s" : ""} salvo{pendentesOffline > 1 ? "s" : ""} no
           aparelho, aguardando internet pra sincronizar.
         </div>
       )}
 
-      {faseAtual.ehAquecimento && (
-        <div className="flex items-center gap-1.5 rounded-xl bg-warning-soft px-3.5 py-2.5 text-sm font-medium text-warning">
-          <Flame size={16} /> Série {serieAtual}ª de aquecimento — use uma carga mais leve. Depois vêm as séries
-          valendo.
-        </div>
-      )}
 
       <div className="flex gap-1 overflow-x-auto border-b border-border">
         {TABS.map((t) => (
@@ -485,7 +501,7 @@ export function ExecucaoClient({
                 href={proximoHref}
                 className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
               >
-                {ehUltimoExercicio ? "Finalizar treino" : "Próximo exercício"}
+                {proximoLabel}
                 <ChevronRight size={18} />
               </Link>
             </>
@@ -502,9 +518,9 @@ export function ExecucaoClient({
         <>
           <div>
             <p className="mb-1 text-xs font-medium uppercase tracking-wide text-muted">
-              Série {todasAsSeriesFeitas ? "· toque para editar uma série já feita" : ""}
+              Série{todasAsSeriesFeitas ? " · toque para editar uma série já feita" : ""}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {Array.from({ length: totalSeries }, (_, i) => i + 1).map((n) => {
                 const ehAquecimentoDoN = continuacao && n <= seriesAquecimento;
                 return (
@@ -527,6 +543,16 @@ export function ExecucaoClient({
                   </button>
                 );
               })}
+              {faseAtual.ehAquecimento && (
+                <span className="flex items-center gap-1 text-xs font-medium text-warning">
+                  <Flame size={13} /> {serieAtual}ª de aquecimento
+                </span>
+              )}
+              {parceiro && (
+                <span className="flex items-center gap-1 text-xs font-medium text-primary">
+                  <Link2 size={13} className="shrink-0" /> Bi-set
+                </span>
+              )}
             </div>
           </div>
 
@@ -540,22 +566,34 @@ export function ExecucaoClient({
           </p>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
+              <label className={cn("block text-xs font-medium text-muted", parceiro ? "mb-1" : "mb-1.5")}>
+                Repetições
+              </label>
               <input
-                type="number"
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
                 value={reps}
-                onChange={(e) => setReps(e.target.value)}
-                className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                onChange={(e) => setReps(e.target.value.replace(/\D/g, ""))}
+                className={cn(
+                  "w-full rounded-xl border border-border px-3 text-center text-lg font-semibold",
+                  parceiro ? "h-10" : "h-11"
+                )}
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-medium text-muted">Carga (kg)</label>
+              <label className={cn("block text-xs font-medium text-muted", parceiro ? "mb-1" : "mb-1.5")}>
+                Carga (kg)
+              </label>
               <input
                 type="text"
                 inputMode="decimal"
                 value={carga}
                 onChange={(e) => setCarga(e.target.value)}
-                className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                className={cn(
+                  "w-full rounded-xl border border-border px-3 text-center text-lg font-semibold",
+                  parceiro ? "h-10" : "h-11"
+                )}
               />
             </div>
           </div>
@@ -572,29 +610,31 @@ export function ExecucaoClient({
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted">Repetições</label>
+                  <label className="mb-1 block text-xs font-medium text-muted">Repetições</label>
                   <input
-                    type="number"
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     value={repsParceiro}
-                    onChange={(e) => setRepsParceiro(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                    onChange={(e) => setRepsParceiro(e.target.value.replace(/\D/g, ""))}
+                    className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
                   />
                 </div>
                 <div>
-                  <label className="mb-1.5 block text-xs font-medium text-muted">Carga (kg)</label>
+                  <label className="mb-1 block text-xs font-medium text-muted">Carga (kg)</label>
                   <input
                     type="text"
                     inputMode="decimal"
                     value={cargaParceiro}
                     onChange={(e) => setCargaParceiro(e.target.value)}
-                    className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+                    className="h-10 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
                   />
                 </div>
               </div>
             </>
           )}
 
-          <Button onClick={salvarSerie} disabled={pending} className="w-full">
+          <Button onClick={salvarSerie} disabled={pending} size={parceiro ? "sm" : "md"} className="w-full">
             {seriesFeitas.includes(serieAtual)
               ? "Salvar alteração nesta série"
               : parceiro
@@ -602,15 +642,14 @@ export function ExecucaoClient({
                 : "Finalizar série"}
           </Button>
 
-          {!todasAsSeriesFeitas && (
-            <p className="flex items-center justify-center gap-1.5 text-xs text-muted">
-              <Clock size={13} />
-              Descanso: {formatarTempo((faseAtual.ehAquecimento ? aulaExercicio : (continuacao ?? aulaExercicio)).descanso_seg ?? 60)}
-            </p>
-          )}
-
           {!todasAsSeriesFeitas && !continuacao && (
-            <Button onClick={finalizarTodas} disabled={pending} variant="outline" className="w-full">
+            <Button
+              onClick={finalizarTodas}
+              disabled={pending}
+              variant="outline"
+              size={parceiro ? "sm" : "md"}
+              className="w-full"
+            >
               Finalizar todas as séries
             </Button>
           )}
@@ -625,7 +664,7 @@ export function ExecucaoClient({
                 href={proximoHref}
                 className="flex w-full items-center justify-center gap-1.5 rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-dark"
               >
-                {ehUltimoExercicio ? "Finalizar treino" : "Próximo exercício"}
+                {proximoLabel}
                 <ChevronRight size={18} />
               </Link>
             </>
@@ -635,7 +674,10 @@ export function ExecucaoClient({
               não escondido atrás de menu (correção de design confirmada). */}
           <Link
             href={relatarDorHref}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/30 bg-danger-soft px-4 py-2.5 text-sm font-semibold text-danger"
+            className={cn(
+              "flex w-full items-center justify-center gap-2 rounded-2xl border border-danger/30 bg-danger-soft text-sm font-semibold text-danger",
+              parceiro ? "px-4 py-1.5" : "px-4 py-2.5"
+            )}
           >
             <HeartCrack size={18} />
             Relatar dor/desconforto

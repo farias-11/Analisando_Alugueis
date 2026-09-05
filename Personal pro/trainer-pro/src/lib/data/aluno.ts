@@ -124,15 +124,23 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
 
   if (linhas.length === 0) return aulasOrdenadas[0]; // nunca treinou nesse ciclo -> primeira aula
 
-  // se já treinou hoje, a "aula do dia" continua sendo a que ele fez hoje —
-  // só avança pra próxima da sequência quando o dia realmente virar (senão,
-  // ao terminar um treino, a home já pularia pro próximo em vez de mostrar
-  // "concluído" pro que acabou de ser feito)
+  // se já treinou hoje mas AINDA NÃO terminou esse treino, a "aula do dia"
+  // continua sendo a que ele começou — senão, ao sair no meio e voltar, a
+  // home já pularia pro próximo em vez de deixar ele continuar de onde parou.
+  // Só avança pra próxima da sequência (mesmo no mesmo dia) quando o treino
+  // de hoje está DE VERDADE 100% concluído — senão ficava reoferecendo um
+  // treino que o aluno já tinha acabado de terminar.
   const hojeInicio = new Date();
   hojeInicio.setHours(0, 0, 0, 0);
   const feitaHoje = linhas.find((l) => new Date(l.data) >= hojeInicio);
   if (feitaHoje) {
-    return idParaAula.get(feitaHoje.aula_exercicios!.aula_id) ?? aulasOrdenadas[0];
+    const aulaHojeId = feitaHoje.aula_exercicios!.aula_id;
+    const { todosConcluidos } = await getStatusExerciciosAulaHoje(alunoId, aulaHojeId);
+    if (!todosConcluidos) return idParaAula.get(aulaHojeId) ?? aulasOrdenadas[0];
+
+    const indiceHoje = aulasOrdenadas.findIndex((a) => a.id === aulaHojeId);
+    if (indiceHoje === -1) return aulasOrdenadas[0];
+    return aulasOrdenadas[(indiceHoje + 1) % aulasOrdenadas.length];
   }
 
   const ultimaAulaId = linhas[0].aula_exercicios!.aula_id;
@@ -140,6 +148,44 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
   if (indiceAtual === -1) return aulasOrdenadas[0];
 
   return aulasOrdenadas[(indiceAtual + 1) % aulasOrdenadas.length];
+}
+
+/** Status de cada exercício da aula hoje (aquecimento + continuação do mesmo
+ * exercício contam como um item só; cardio conta como feito com qualquer
+ * registro hoje) — mesma regra usada na lista de exercícios da aula, mas
+ * compartilhada aqui pra também dar pra saber se o treino INTEIRO já terminou
+ * de verdade (não só o último exercício que o aluno abriu). */
+export async function getStatusExerciciosAulaHoje(alunoId: string, aulaId: string) {
+  const exercicios = await getExerciciosDaAula(aulaId);
+  if (exercicios.length === 0) return { itens: [] as { aulaExercicioId: string; concluido: boolean }[], todosConcluidos: false };
+
+  const supabase = await createClient();
+  const ids = exercicios.map((e) => e.id);
+  const hojeInicio = new Date();
+  hojeInicio.setHours(0, 0, 0, 0);
+  const { data: execs } = await supabase
+    .from("execucoes")
+    .select("aula_exercicio_id")
+    .eq("aluno_id", alunoId)
+    .in("aula_exercicio_id", ids)
+    .gte("data", hojeInicio.toISOString());
+
+  const contagem = new Map<string, number>();
+  for (const e of execs ?? []) contagem.set(e.aula_exercicio_id, (contagem.get(e.aula_exercicio_id) ?? 0) + 1);
+
+  const itens: { aulaExercicioId: string; concluido: boolean }[] = [];
+  for (let i = 0; i < exercicios.length; i++) {
+    const atual = exercicios[i];
+    const anterior = exercicios[i - 1];
+    if (anterior?.eh_aquecimento && anterior.exercicio_id === atual.exercicio_id) continue;
+    const proximo = exercicios[i + 1];
+    const temContinuacao = atual.eh_aquecimento && proximo && proximo.exercicio_id === atual.exercicio_id;
+    const feitoPrincipal = (contagem.get(atual.id) ?? 0) >= atual.series;
+    const feitoContinuacao = !temContinuacao || (contagem.get(proximo!.id) ?? 0) >= proximo!.series;
+    const concluido = atual.tipo === "cardio" ? (contagem.get(atual.id) ?? 0) > 0 : feitoPrincipal && feitoContinuacao;
+    itens.push({ aulaExercicioId: atual.id, concluido });
+  }
+  return { itens, todosConcluidos: itens.length > 0 && itens.every((i) => i.concluido) };
 }
 
 /** Se o aluno já registrou pelo menos uma série de qualquer exercício dessa
@@ -185,10 +231,10 @@ export async function getAulaExercicio(id: string) {
   return data;
 }
 
-/** Maior carga e maior repetição já registradas nesse exercício, pra exibir
- * como referência — uma query só (não duas em série): busca todas as linhas
- * e calcula os dois máximos em JS, já que é sempre um punhado de execuções
- * por exercício por aluno. */
+/** Melhor série já registrada nesse exercício (maior carga, com a repetição
+ * daquela MESMA série) — pra exibir como referência. Carga e repetição
+ * precisam vir da mesma linha: pegar cada máximo de series diferentes
+ * inventaria uma combinação que o aluno nunca fez. */
 export async function getUltimaMarca(
   alunoId: string,
   aulaExercicioId: string
@@ -202,15 +248,27 @@ export async function getUltimaMarca(
 
   if (!data || data.length === 0) return null;
 
-  let maiorCarga: number | null = null;
+  // A marca tem que vir de UMA série que realmente aconteceu — pegar a maior
+  // carga e a maior repetição de séries DIFERENTES (como era antes) inventa
+  // uma combinação que o aluno nunca fez (ex: "15kg x 15 reps" quando na
+  // verdade fez 15kg x 10 reps numa série e 8kg x 15 reps em outra), fazendo
+  // parecer que o app registrou errado o que ele fez.
+  let melhor: { carga: number | null; repeticoes: number | null } | null = null;
+  for (const row of data) {
+    if (row.carga === null) continue;
+    if (!melhor || melhor.carga === null || row.carga > melhor.carga) melhor = row;
+  }
+  if (melhor) return melhor;
+
+  // nenhuma série com carga registrada (ex: exercício sem peso) — melhor
+  // esforço vira só a maior repetição
   let maiorRepeticoes: number | null = null;
   for (const row of data) {
-    if (row.carga !== null && (maiorCarga === null || row.carga > maiorCarga)) maiorCarga = row.carga;
     if (row.repeticoes !== null && (maiorRepeticoes === null || row.repeticoes > maiorRepeticoes)) {
       maiorRepeticoes = row.repeticoes;
     }
   }
-  return { carga: maiorCarga, repeticoes: maiorRepeticoes };
+  return { carga: null, repeticoes: maiorRepeticoes };
 }
 
 /** Séries já registradas hoje para esse exercício — usado pra restaurar o

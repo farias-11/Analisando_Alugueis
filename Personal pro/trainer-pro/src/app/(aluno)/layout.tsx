@@ -23,7 +23,12 @@ export default async function AlunoLayout({ children }: { children: React.ReactN
             engole todo clique nele, inclusive o botão de voltar. md:hidden
             porque no desktop o sino já vem pelo Sidebar. */}
         <div className="pointer-events-none sticky top-0 z-40 h-0 overflow-visible md:hidden">
-          <div className="flex justify-end px-4 pt-3.5">
+          {/* pt-[8.5px] (não pt-3.5, que só alinhava o TOPO do sino com o
+              topo do texto do título) centraliza de verdade o círculo de
+              36px do sino na altura real do TopBar (~53px: py-3.5 + linha
+              do título) — sem isso ele ficava sempre um pouco abaixo do
+              centro, parecendo "encostado" na borda de baixo do cabeçalho. */}
+          <div className="flex justify-end px-4 pt-[8.5px]">
             <div className="pointer-events-auto">
               <NotificationBell count={naoLidas} href="/avisos" />
             </div>

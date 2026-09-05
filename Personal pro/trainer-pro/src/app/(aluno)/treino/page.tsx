@@ -6,10 +6,28 @@ import { ScrollFit } from "@/components/scroll-fit";
 import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { CheckCircle2, Dumbbell, Moon } from "lucide-react";
+import { Dumbbell, Moon, Play } from "lucide-react";
 import Link from "next/link";
 
-const NOMES_DIAS = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const NOMES_DIAS_ABREV = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
+const NOMES_DIAS_COMPLETO = [
+  "Domingo",
+  "Segunda",
+  "Terça",
+  "Quarta",
+  "Quinta",
+  "Sexta",
+  "Sábado",
+];
+
+// "A - Peito, ombro e tríceps" -> { titulo: "Treino A", subtitulo: "Peito, ombro e tríceps" }
+// nomes que não seguem esse padrão (ex: personal usou outro estilo) caem no
+// fallback (nome inteiro como título) em vez de quebrar a tela.
+function partesDoNome(nome: string) {
+  const match = nome.match(/^([A-Za-zÀ-ÿ0-9]+)\s*-\s*(.+)$/);
+  if (!match) return { titulo: nome, subtitulo: null as string | null };
+  return { titulo: `Treino ${match[1]}`, subtitulo: match[2] };
+}
 
 export default async function TreinoDoDiaPage() {
   const { aluno } = await requireAluno();
@@ -79,65 +97,87 @@ export default async function TreinoDoDiaPage() {
   return (
     <div>
       <TopBar title="Treino" />
-      <div className="space-y-4 p-4 pb-2 pr-14">
-        <p className="text-xs font-medium uppercase tracking-wide text-muted">
-          Ciclo atual · {ciclo.duracao_semanas} semanas
-        </p>
+      <ScrollFit
+        rolar={false}
+        topo
+        className="flex flex-col space-y-[var(--sf-gap)] p-[calc(var(--sf-pad)*0.75)] [&>*]:shrink-0"
+      >
+        <div>
+          <p className="text-[length:var(--sf-label,0.75rem)] text-muted">Ciclo atual</p>
+          <p className="text-base font-bold text-foreground">
+            {ciclo.nome} · {ciclo.duracao_semanas} semanas
+          </p>
+        </div>
 
         {aulaHoje ? (
           <Link href={`/treino/${aulaHoje.id}`}>
-            <Card className="relative flex flex-col bg-primary p-6 text-white">
+            <Card className="relative flex flex-col overflow-hidden bg-primary p-[calc(var(--sf-pad)*0.9)] text-white">
               <Dumbbell size={26} strokeWidth={1.75} className="absolute right-5 top-5 text-white/35" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Treino de hoje</p>
-              <p className="mt-1.5 max-w-[85%] text-2xl font-extrabold leading-tight">{aulaHoje.nome}</p>
+              <p className="text-[length:var(--sf-label,0.75rem)] font-semibold uppercase tracking-wide text-white/80">
+                Próximo treino
+              </p>
+              <p className="mt-1.5 max-w-[80%] text-[length:calc(var(--sf-title,1.5rem)*0.9)] font-extrabold leading-tight">
+                {partesDoNome(aulaHoje.nome).subtitulo ?? aulaHoje.nome}
+              </p>
               <p className="mt-1 text-sm text-white/80">
                 {totalExerciciosHoje} exercícios
                 {aulaHoje.duracao_estimada_min ? ` · ~${aulaHoje.duracao_estimada_min} min` : ""}
               </p>
-              <div className="mt-4 w-full rounded-2xl bg-white py-3.5 text-center text-sm font-semibold text-primary-dark">
-                Começar treino
+              <div className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-center text-sm font-bold uppercase tracking-wide text-primary-dark">
+                <Play size={14} className="fill-current" /> Começar treino
               </div>
             </Card>
           </Link>
         ) : (
-          <Card className="flex items-center gap-2 bg-neutral-soft">
-            <Moon size={16} className="text-muted" />
-            <p className="text-sm text-muted">Hoje é dia de descanso.</p>
+          <Card className="relative flex flex-col bg-primary p-[calc(var(--sf-pad)*0.9)] text-white">
+            <Dumbbell size={26} strokeWidth={1.75} className="absolute right-5 top-5 text-white/35" />
+            <p className="text-[length:var(--sf-label,0.75rem)] font-semibold uppercase tracking-wide text-white/80">
+              Próximo treino
+            </p>
+            <p className="mt-3 flex items-center gap-1.5 text-base font-semibold">
+              <Moon size={16} /> Hoje é dia de descanso.
+            </p>
           </Card>
         )}
 
-        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Esta semana</p>
-      </div>
+        <p className="text-[length:var(--sf-label,0.75rem)] font-semibold uppercase tracking-wide text-muted">
+          Esta semana
+        </p>
 
-      <ScrollFit rolar={false} topo className="px-4 pb-4 pr-[3.25rem]">
-        <div className="space-y-2">
+        <div className="space-y-4">
           {aulasComStatus.map(({ aula, totalExercicios, concluidaNaSemana }) => {
             const destaque = aulaHoje?.id === aula.id;
             const diaLabel =
               aula.dias_semana && aula.dias_semana.length > 0
-                ? aula.dias_semana
-                    .slice()
-                    .sort()
-                    .map((d) => NOMES_DIAS[d])
-                    .join("/")
+                ? aula.dias_semana.length === 1
+                  ? NOMES_DIAS_COMPLETO[aula.dias_semana[0]]
+                  : aula.dias_semana
+                      .slice()
+                      .sort()
+                      .map((d) => NOMES_DIAS_ABREV[d])
+                      .join("/")
                 : null;
+            const { titulo, subtitulo } = partesDoNome(aula.nome);
             return (
               <Link key={aula.id} href={`/treino/${aula.id}`}>
                 <Card
                   className={cn(
-                    "flex items-center justify-between gap-3",
-                    destaque && "border-primary bg-primary-soft"
+                    "flex items-center justify-between gap-3 border-l-4 p-5",
+                    concluidaNaSemana
+                      ? "border-l-success"
+                      : destaque
+                        ? "border-l-primary bg-primary-soft"
+                        : "border-l-transparent"
                   )}
                 >
                   <div>
-                    <p className="text-sm font-semibold">{aula.nome}</p>
-                    <p className="text-xs text-muted">
-                      {totalExercicios} exercícios
-                      {aula.duracao_estimada_min ? ` · ~${aula.duracao_estimada_min} min` : ""}
+                    <p className="text-base font-semibold">{titulo}</p>
+                    <p className="text-sm text-muted">
+                      {subtitulo ?? `${totalExercicios} exercícios`}
                     </p>
                   </div>
                   {concluidaNaSemana ? (
-                    <CheckCircle2 className="shrink-0 text-success" size={20} />
+                    <span className="shrink-0 text-xs font-semibold text-success">Concluído</span>
                   ) : destaque ? (
                     <Pill tone="primary" className="shrink-0">
                       Hoje

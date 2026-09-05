@@ -19,6 +19,27 @@ import { cn } from "@/lib/utils";
 // no fluxo natural (sem altura forçada) e sobrar um vão em branco enorme.
 const MEDIA_FLUXO_NATURAL = "(min-width: 768px)";
 
+function varsDaEscala(escala: number) {
+  return {
+    "--sf-gap": `${Math.round(2 + (28 - 2) * escala)}px`,
+    "--sf-pad": `${Math.round(6 + (32 - 6) * escala)}px`,
+    // TETO de altura de mídia (vídeo/imagem do exercício), não o tamanho
+    // em si — o vídeo usa aspect-video (16:9, proporcional à própria
+    // largura, igual as telas já aprovadas) por padrão; esse var só entra
+    // como max-height de segurança pras telas mais apertadas, onde nem o
+    // piso de gap/pad é suficiente e aí sim precisa cortar um pouco a
+    // altura do vídeo pra não estourar.
+    "--sf-media-h": `${Math.round(100 + (500 - 100) * escala)}px`,
+    // Mesmas faixas de --fs-name/--fs-tiny da Home (viewport-fit.tsx) —
+    // título e rótulo aqui usam o MESMO padrão de crescimento, pra telas
+    // altas "encherem" com tudo maior (texto incluso), não só mais respiro.
+    // Só quem referenciar via className precisa disso — não afeta as telas
+    // de execução, que não usam esses vars.
+    "--sf-title": `${Math.round(20 + (32 - 20) * escala)}px`,
+    "--sf-label": `${Math.round(11 + (14 - 11) * escala)}px`,
+  };
+}
+
 export function ScrollFit({
   children,
   className,
@@ -43,6 +64,18 @@ export function ScrollFit({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [altura, setAltura] = useState<number | null>(null);
+  // 0..1 — quanto o espaçamento/padding (--sf-gap/--sf-pad) engorda além do
+  // piso mais apertado, pra preencher sobra em telas altas em vez dela virar
+  // vão vazio. Só afeta ESPAÇAMENTO, nunca o tamanho de um elemento
+  // específico (ex: o vídeo, que é shrink-0 com altura fixa própria) — e
+  // TODO filho do container tem shrink-0 (ver className embaixo), então
+  // mesmo se a escala errar pra mais, o pior caso é uma sobra de alguns
+  // poucos pixels, nunca um elemento sendo espremido a quase zero (bug já
+  // visto aqui antes). A escala em si vem do estado autocorrigido em
+  // medir() — não é derivada direto da altura medida, porque isso criava um
+  // ciclo (escala maior → padding maior → conteúdo mais alto → precisava
+  // medir de novo, mas nada remedia depois que os vars aplicavam).
+  const [escala, setEscala] = useState(0);
   const [desktop, setDesktop] = useState(false);
 
   useEffect(() => {
@@ -65,7 +98,7 @@ export function ScrollFit({
 
     // tentativas > 0 = chamada de reconfirmação (ver abaixo) — evita
     // recursão infinita se por algum motivo nunca convergir.
-    function medir(tentativas = 0) {
+    function medir(tentativas = 0, escalaAtual = rolar ? 0 : 1) {
       const el = ref.current;
       if (!el) return;
       const viewportH = window.visualViewport?.height ?? window.innerHeight;
@@ -82,8 +115,42 @@ export function ScrollFit({
       // aqui). Mesma técnica de autocorreção da Home, ver
       // (aluno)/home/viewport-fit.tsx pro histórico completo.
       el.style.height = `${alvo}px`;
+
+      // Aplica os vars de escala IMPERATIVAMENTE, direto no DOM, antes de
+      // medir — não espera o React re-renderizar (isso é assíncrono e
+      // deixava a medição sempre um passo atrasada, um bug real já visto
+      // aqui: nunca via o resultado da PRÓPRIA correção a tempo).
+      if (!rolar) {
+        const vars = varsDaEscala(escalaAtual);
+        el.style.setProperty("--sf-gap", vars["--sf-gap"]);
+        el.style.setProperty("--sf-pad", vars["--sf-pad"]);
+        el.style.setProperty("--sf-media-h", vars["--sf-media-h"]);
+      }
+
+      // O excesso de página (ex: pb-24 do layout do aluno) precisa ser
+      // descontado do alvo ANTES de checar se o conteúdo cabe — senão o
+      // check passa com a altura maior (alvo), mas a altura de verdade
+      // aplicada em seguida (disponivel, menor) nunca é reconferida, e um
+      // caso que "passou" no alvo pode estourar de verdade na altura final
+      // (bug real já visto aqui: escala aceita em alvo=530 com só 1px de
+      // sobra, depois encolhida pra 509 sem reconferir, sobrando ~21px
+      // cortados pelo overflow-hidden).
       const excesso = Math.max(0, document.documentElement.scrollHeight - viewportH);
-      setAltura(Math.max(160, alvo - excesso));
+      const disponivel = Math.max(160, alvo - excesso);
+      el.style.height = `${disponivel}px`;
+
+      const estourouDentroAgora = el.scrollHeight - el.clientHeight > 1;
+
+      if (estourouDentroAgora && tentativas < 14) {
+        // Essa escala não coube por dentro (overflow-hidden esconde isso do
+        // documento — o scrollHeight do documento não mostra) — reduz e
+        // remede antes de aceitar qualquer altura/escala como resultado.
+        medir(tentativas + 1, Math.max(0, escalaAtual - 0.08));
+        return;
+      }
+
+      setAltura(disponivel);
+      setEscala(escalaAtual);
 
       // Reconfirma um frame depois — cobre timing (fonte carregando,
       // Safari com a barra em transição) sem arriscar uma chamada
@@ -92,7 +159,7 @@ export function ScrollFit({
         requestAnimationFrame(() => {
           const aindaExcesso =
             document.documentElement.scrollHeight - (window.visualViewport?.height ?? window.innerHeight);
-          if (aindaExcesso > 1) medir(tentativas + 1);
+          if (aindaExcesso > 1) medir(tentativas + 1, escalaAtual);
         });
       }
     }
@@ -114,14 +181,18 @@ export function ScrollFit({
       window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
     };
-  }, [desktop]);
+  }, [desktop, rolar]);
 
   const constrangido = !desktop && altura !== null;
+  const varsEscala = varsDaEscala(escala) as React.CSSProperties;
 
   return (
     <div
       ref={ref}
-      style={constrangido ? { height: `${altura}px` } : undefined}
+      style={{
+        ...(constrangido ? { height: `${altura}px` } : undefined),
+        ...(!rolar ? varsEscala : undefined),
+      }}
       className={cn(
         constrangido &&
           (rolar

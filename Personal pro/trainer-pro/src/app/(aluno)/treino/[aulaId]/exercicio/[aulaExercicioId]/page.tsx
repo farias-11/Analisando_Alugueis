@@ -5,6 +5,7 @@ import {
   getExerciciosDaAula,
   getExecucoesDeHoje,
   getInicioTreinoHoje,
+  getStatusExerciciosAulaHoje,
 } from "@/lib/data/aluno";
 import { notFound, redirect } from "next/navigation";
 import { TopBar } from "@/components/nav/top-bar";
@@ -77,6 +78,12 @@ export default async function ExecucaoExercicioPage({
   const proximoExercicioId = proximaPosicao < ordem.length ? ordem[proximaPosicao] : null;
   const ehUltimoExercicio = proximaPosicao >= ordem.length;
 
+  // "ehUltimoExercicio" é só posição na lista — se o aluno pulou exercícios e
+  // foi direto pro último, terminá-lo NÃO significa que o treino inteiro
+  // acabou. Só trata como treino concluído quando todos os exercícios da aula
+  // (não só os que vêm depois deste na ordem) estão de fato feitos hoje.
+  const { todosConcluidos: treinoTotalmenteConcluido } = await getStatusExerciciosAulaHoje(aluno.id, aulaId);
+
   return (
     <div>
       <TopBar
@@ -91,6 +98,7 @@ export default async function ExecucaoExercicioPage({
         execucoesDeHoje={execucoesDeHoje}
         proximoExercicioId={proximoExercicioId}
         ehUltimoExercicio={ehUltimoExercicio}
+        treinoTotalmenteConcluido={treinoTotalmenteConcluido}
         parceiro={parceiroRegistro}
         ultimaMarcaParceiro={ultimaMarcaParceiro}
         execucoesDeHojeParceiro={execucoesDeHojeParceiro}
