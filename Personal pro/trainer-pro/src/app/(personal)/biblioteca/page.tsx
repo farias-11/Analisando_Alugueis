@@ -9,6 +9,7 @@ import { youtubeThumbnailUrl } from "@/lib/youtube";
 import { Download, Trash2, Video } from "lucide-react";
 import type { Exercicio } from "@/lib/types";
 import Link from "next/link";
+import Image from "next/image";
 
 export default async function BibliotecaPage({
   searchParams,
@@ -27,11 +28,21 @@ export default async function BibliotecaPage({
   if (grupo) query = query.eq("grupo_muscular", grupo);
 
   const { data: exercicios } = await query;
-  const { data: grupos } = await supabase
-    .from("exercicios")
-    .select("grupo_muscular")
-    .eq("personal_id", personal.id);
-  const gruposUnicos = Array.from(new Set((grupos ?? []).map((g) => g.grupo_muscular)));
+  // sem filtro ativo, "exercicios" já traz TODOS os exercícios do personal —
+  // dá pra tirar os grupos únicos dele mesmo, sem outra ida ao banco. Só
+  // quando um filtro já está aplicado (exercicios vem recortado) que precisa
+  // de fato de uma query separada, sem o filtro, pra saber todos os grupos.
+  const gruposUnicos = grupo
+    ? Array.from(
+        new Set(
+          (
+            (
+              await supabase.from("exercicios").select("grupo_muscular").eq("personal_id", personal.id)
+            ).data ?? []
+          ).map((g) => g.grupo_muscular)
+        )
+      )
+    : Array.from(new Set((exercicios ?? []).map((e) => e.grupo_muscular)));
 
   return (
     <div className="space-y-4 p-4 md:p-0">
@@ -74,8 +85,7 @@ export default async function BibliotecaPage({
             <Card key={ex.id} className="overflow-hidden p-0">
               <div className="relative flex h-24 items-center justify-center bg-neutral-soft text-muted-2">
                 {capa ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={capa} alt="" className="h-full w-full object-cover" />
+                  <Image src={capa} alt="" fill sizes="(max-width: 768px) 50vw, 25vw" className="object-cover" />
                 ) : ex.midia_tipo === "upload" && ex.exercicio_midias?.length ? (
                   <Video size={28} />
                 ) : (

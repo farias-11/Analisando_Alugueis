@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { requireAluno } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { getSignedUrls } from "@/lib/supabase/signed-url";
@@ -78,8 +79,15 @@ export default async function MinhasMedidasPage() {
               {galeria.map((f) => (
                 <div key={f.id} className="overflow-hidden rounded-xl bg-neutral-soft">
                   {f.signedUrl && (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={f.signedUrl} alt={f.angulo ?? "Foto de progresso"} className="aspect-square w-full object-cover" />
+                    <div className="relative aspect-square w-full">
+                      <Image
+                        src={f.signedUrl}
+                        alt={f.angulo ?? "Foto de progresso"}
+                        fill
+                        sizes="(max-width: 768px) 33vw, 150px"
+                        className="object-cover"
+                      />
+                    </div>
                   )}
                   <p className="px-1.5 py-1 text-center text-[10px] text-muted">{formatDataBR(f.data)}</p>
                 </div>

@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 import { enviarFotoAngulo } from "@/app/actions/medidas";
 import { Camera, Check } from "lucide-react";
 
@@ -24,8 +25,13 @@ export function FotoAnguloBlock({ angulo, fotoUrlAtual }: { angulo: string; foto
       <input type="hidden" name="angulo" value={angulo} />
       <label className="relative flex aspect-[3/4] w-full cursor-pointer flex-col items-center justify-center gap-1.5 overflow-hidden rounded-2xl border border-dashed border-border bg-neutral-soft text-muted">
         {fotoUrlAtual ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={fotoUrlAtual} alt={angulo} className="absolute inset-0 h-full w-full object-cover" />
+          <Image
+            src={fotoUrlAtual}
+            alt={angulo}
+            fill
+            sizes="(max-width: 768px) 45vw, 200px"
+            className="object-cover"
+          />
         ) : (
           <>
             <Camera size={22} />

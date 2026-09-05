@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { registrarSerie, registrarTodasAsSeries } from "@/app/actions/execucoes";
 import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
@@ -411,7 +412,7 @@ export function ExecucaoClient({
           sem rolar (mesmo objetivo da Home, ver viewport-fit.tsx). O vídeo
           continua sempre visível e com controles completos, só não domina
           mais a tela inteira. */}
-      <div className="aspect-video max-h-[var(--sf-media-h,220px)] w-full shrink-0 overflow-hidden rounded-card bg-black">
+      <div className="relative aspect-video max-h-[var(--sf-media-h,220px)] w-full shrink-0 overflow-hidden rounded-card bg-black">
         {embedUrl ? (
           <iframe
             src={embedUrl}
@@ -423,11 +424,12 @@ export function ExecucaoClient({
           primeiraMidiaUpload.tipo === "video" ? (
             <video src={primeiraMidiaUpload.url} controls className="h-full w-full object-cover" />
           ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
+            <Image
               src={primeiraMidiaUpload.url}
               alt={aulaExercicio.exercicio.nome}
-              className="h-full w-full object-cover"
+              fill
+              sizes="(max-width: 768px) 100vw, 500px"
+              className="object-cover"
             />
           )
         ) : (

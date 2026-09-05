@@ -24,7 +24,7 @@ export function AvatarUpload({
     >
       <label className="group relative block h-16 w-16 cursor-pointer overflow-hidden rounded-full bg-primary-soft">
         {fotoUrl ? (
-          <Image src={fotoUrl} alt={nome} fill className="object-cover" />
+          <Image src={fotoUrl} alt={nome} fill sizes="64px" className="object-cover" />
         ) : (
           <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-primary-dark">
             {nome.charAt(0)}

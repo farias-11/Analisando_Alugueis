@@ -1,11 +1,5 @@
 import { requireAluno } from "@/lib/data/current-user";
-import {
-  getAderenciaSemana,
-  getAulasDoCiclo,
-  getCicloAtivo,
-  aulaDoDia,
-  aulaConcluidaHoje,
-} from "@/lib/data/aluno";
+import { getAderenciaSemana, getAulasDoCiclo, getCicloAtivo, aulaDoDia } from "@/lib/data/aluno";
 import { getResumoEvolucao, type ResumoEvolucao } from "@/lib/data/evolucao";
 import { getGraficoPeso } from "@/lib/data/graficos";
 import { saudacaoPorHorario, type Tendencia } from "@/lib/status";
@@ -135,18 +129,21 @@ export default async function HomePage() {
 
   // ciclo ativo roda em paralelo com resumo/peso (não dependem dele); aulas
   // só dá pra buscar depois de saber o ciclo. aulaHoje e aderência da semana
-  // usam as MESMAS aulas (uma query só, não duas) e rodam juntas.
+  // usam as MESMAS aulas (uma query só, não duas) e rodam juntas — e
+  // "aulasFeitasHojeIds" (dentro de getAderenciaSemana) já resolve "o aluno
+  // fez o treino de hoje?" sem outra ida ao banco depois (era um 3º estágio
+  // sequencial antes, aulaConcluidaHoje, removido).
   const [ciclo, resumo, pesoChart] = await Promise.all([
     getCicloAtivo(aluno.id),
     getResumoEvolucao(aluno.id),
     getGraficoPeso(aluno.id),
   ]);
   const aulas = ciclo ? await getAulasDoCiclo(ciclo.id) : [];
-  const [aulaHoje, { concluidas, meta }] = await Promise.all([
+  const [aulaHoje, { concluidas, meta, aulasFeitasHojeIds }] = await Promise.all([
     aulaDoDia(aluno.id, aulas),
     getAderenciaSemana(aluno.id, aulas),
   ]);
-  const jaFezHoje = aulaHoje ? await aulaConcluidaHoje(aluno.id, aulaHoje.id) : false;
+  const jaFezHoje = aulaHoje ? aulasFeitasHojeIds.has(aulaHoje.id) : false;
 
   const primeiroNome = aluno.nome.split(" ")[0];
   const saudacao = saudacaoPorHorario();

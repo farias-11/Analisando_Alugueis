@@ -29,6 +29,12 @@ function isPublicPath(pathname: string) {
 export async function updateSession(request: NextRequest) {
   const response = NextResponse.next({ request });
 
+  // Rota pública: o resultado de getUser() nunca é usado pra nada aqui (o
+  // redirect abaixo só dispara quando a rota NÃO é pública), então nem vale
+  // pagar a chamada de rede pro servidor de auth — ela rodava em toda
+  // requisição, até em /login, sem nenhum efeito no resultado.
+  if (isPublicPath(request.nextUrl.pathname)) return response;
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -51,7 +57,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user && !isPublicPath(request.nextUrl.pathname)) {
+  if (!user) {
     const loginUrl = new URL("/login", request.url);
     return NextResponse.redirect(loginUrl);
   }

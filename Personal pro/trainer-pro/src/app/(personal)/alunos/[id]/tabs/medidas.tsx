@@ -69,7 +69,7 @@ export async function MedidasTab({ alunoId, consentimentoAceito }: { alunoId: st
             {fotosComUrl.map((f) => (
               <div key={f.id} className="shrink-0 text-center">
                 <div className="relative h-24 w-20 overflow-hidden rounded-lg bg-neutral-soft">
-                  {f.signedUrl && <Image src={f.signedUrl} alt="" fill className="object-cover" />}
+                  {f.signedUrl && <Image src={f.signedUrl} alt="" fill sizes="80px" className="object-cover" />}
                 </div>
                 <p className="mt-1 text-[10px] text-muted">{formatDataBR(f.data)}</p>
               </div>

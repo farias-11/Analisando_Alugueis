@@ -41,7 +41,7 @@ export default async function FichaAlunoPage({
         <Card className="flex items-center gap-3">
           <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-full bg-primary-soft">
             {alunoTyped.foto_url ? (
-              <Image src={alunoTyped.foto_url} alt={alunoTyped.nome} fill className="object-cover" />
+              <Image src={alunoTyped.foto_url} alt={alunoTyped.nome} fill sizes="56px" className="object-cover" />
             ) : (
               <span className="flex h-full w-full items-center justify-center text-lg font-semibold text-primary-dark">
                 {alunoTyped.nome.charAt(0)}

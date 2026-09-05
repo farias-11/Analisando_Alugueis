@@ -48,7 +48,13 @@ export async function TicketCard({
       <p className="text-sm text-foreground/90">{ticket.descricao}</p>
       {fotoUrl && (
         <div className="relative mt-2 h-32 w-full overflow-hidden rounded-lg bg-neutral-soft">
-          <Image src={fotoUrl} alt="Foto do relato" fill className="object-cover" />
+          <Image
+            src={fotoUrl}
+            alt="Foto do relato"
+            fill
+            sizes="(max-width: 768px) 100vw, 400px"
+            className="object-cover"
+          />
         </div>
       )}
 

@@ -65,7 +65,7 @@ export function AlunosListaSelecionavel({ alunos }: { alunos: AlunoComTreino[] }
               <Link href={`/alunos/${aluno.id}`} className="flex flex-1 items-center gap-3 overflow-hidden">
                 <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full bg-primary-soft">
                   {aluno.foto_url ? (
-                    <Image src={aluno.foto_url} alt={aluno.nome} fill className="object-cover" />
+                    <Image src={aluno.foto_url} alt={aluno.nome} fill sizes="44px" className="object-cover" />
                   ) : (
                     <span className="flex h-full w-full items-center justify-center text-sm font-semibold text-primary-dark">
                       {aluno.nome.charAt(0)}

@@ -1,6 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+// alias pra não colidir com o construtor nativo `new Image()` usado em
+// carregarImagem() mais abaixo (esse aqui é só pra montar a imagem de
+// comparação num canvas, não tem nada a ver com next/image).
+import NextImage from "next/image";
 import { formatDataBR } from "@/lib/status";
 import { ChevronLeft, ChevronRight, Download, MoveHorizontal, Loader2 } from "lucide-react";
 
@@ -206,22 +210,24 @@ function SliderAntesDepois({ antes, depois }: { antes: FotoComparavel; depois: F
       }}
     >
       {depois.signedUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
+        <NextImage
           src={depois.signedUrl}
           alt="Depois"
+          fill
+          sizes="260px"
           draggable={false}
-          className="absolute inset-0 h-full w-full object-cover"
+          className="object-cover"
         />
       )}
       <div className="absolute inset-0 overflow-hidden" style={{ clipPath: `inset(0 ${100 - pos}% 0 0)` }}>
         {antes.signedUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+          <NextImage
             src={antes.signedUrl}
             alt="Antes"
+            fill
+            sizes="260px"
             draggable={false}
-            className="absolute inset-0 h-full w-full object-cover"
+            className="object-cover"
           />
         )}
       </div>

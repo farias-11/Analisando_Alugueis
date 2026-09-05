@@ -188,27 +188,6 @@ export async function getStatusExerciciosAulaHoje(alunoId: string, aulaId: strin
   return { itens, todosConcluidos: itens.length > 0 && itens.every((i) => i.concluido) };
 }
 
-/** Se o aluno já registrou pelo menos uma série de qualquer exercício dessa
- * aula hoje — usado pra não ficar convidando a repetir um treino já feito. */
-export async function aulaConcluidaHoje(alunoId: string, aulaId: string): Promise<boolean> {
-  const supabase = await createClient();
-  const { data: exs } = await supabase.from("aula_exercicios").select("id").eq("aula_id", aulaId);
-  const ids = (exs ?? []).map((e) => e.id);
-  if (ids.length === 0) return false;
-
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
-
-  const { count } = await supabase
-    .from("execucoes")
-    .select("id", { count: "exact", head: true })
-    .eq("aluno_id", alunoId)
-    .in("aula_exercicio_id", ids)
-    .gte("data", hojeInicio.toISOString());
-
-  return (count ?? 0) > 0;
-}
-
 export async function getExerciciosDaAula(
   aulaId: string
 ): Promise<(AulaExercicio & { exercicio: Exercicio })[]> {
@@ -336,14 +315,22 @@ export async function getExecucoesRecentes(
 }
 
 /** Recebe as aulas do ciclo ativo já buscadas pelo chamador (evita repetir
- * a mesma consulta de ciclo+aulas que a página já fez em paralelo). */
+ * a mesma consulta de ciclo+aulas que a página já fez em paralelo).
+ *
+ * `aulasFeitasHojeIds` sai de graça da MESMA linha buscada aqui (a janela de
+ * 7 dias já inclui hoje, e cada linha já tem `data`) — antes a Home fazia
+ * mais 2 idas ao banco só pra saber "o aluno já fez o treino de hoje?"
+ * (aulaConcluidaHoje, removida). Evita esse passo extra e sequencial. */
 export async function getAderenciaSemana(alunoId: string, aulas: Aula[]): Promise<{
   concluidas: number;
   meta: number;
+  aulasFeitasHojeIds: Set<string>;
 }> {
-  if (aulas.length === 0) return { concluidas: 0, meta: 0 };
+  if (aulas.length === 0) return { concluidas: 0, meta: 0, aulasFeitasHojeIds: new Set() };
   const supabase = await createClient();
   const seteDiasAtras = new Date(Date.now() - 7 * 86_400_000).toISOString();
+  const hojeInicio = new Date();
+  hojeInicio.setHours(0, 0, 0, 0);
 
   const { data } = await supabase
     .from("execucoes")
@@ -351,11 +338,14 @@ export async function getAderenciaSemana(alunoId: string, aulas: Aula[]): Promis
     .eq("aluno_id", alunoId)
     .gte("data", seteDiasAtras);
 
-  const aulasConcluidas = new Set(
-    ((data ?? []) as unknown as { aula_exercicios: { aula_id: string } | null }[])
-      .map((e) => e.aula_exercicios?.aula_id)
-      .filter(Boolean)
+  const linhas = (data ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[];
+
+  const aulasConcluidas = new Set(linhas.map((e) => e.aula_exercicios?.aula_id).filter(Boolean));
+  const aulasFeitasHojeIds = new Set(
+    linhas
+      .filter((l) => l.aula_exercicios?.aula_id && new Date(l.data) >= hojeInicio)
+      .map((l) => l.aula_exercicios!.aula_id)
   );
 
-  return { concluidas: aulasConcluidas.size, meta: aulas.length };
+  return { concluidas: aulasConcluidas.size, meta: aulas.length, aulasFeitasHojeIds };
 }

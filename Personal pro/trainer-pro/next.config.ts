@@ -33,6 +33,12 @@ const nextConfig: NextConfig = {
         hostname: "*.supabase.co",
         pathname: "/storage/v1/object/sign/**",
       },
+      // capa de exercício na biblioteca, quando o personal só colou um link
+      // do YouTube (sem upload próprio) — ver youtubeThumbnailUrl().
+      {
+        protocol: "https",
+        hostname: "img.youtube.com",
+      },
     ],
   },
 };
