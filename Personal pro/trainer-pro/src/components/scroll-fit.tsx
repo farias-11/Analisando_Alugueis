@@ -164,7 +164,30 @@ export function ScrollFit({
       }
     }
 
-    medir();
+    // Medir ANTES da fonte customizada carregar era o motivo de um flash real
+    // (bug visto aqui): com a fonte de fallback (mais estreita/mais baixa), o
+    // texto cabia numa escala generosa; assim que a fonte de verdade chegava
+    // (pouco depois), o mesmo texto ficava maior, estourava, e a tela toda
+    // encolhia de repente pra escala correta — visível pro aluno como "abre
+    // grande e diminui sozinho". `document.fonts.ready` garante que mesmo essa
+    // PRIMEIRA medição já usa as métricas finais da fonte.
+    let cancelado = false;
+    async function medirDepoisDaFonte() {
+      if (typeof document !== "undefined" && document.fonts?.ready) {
+        try {
+          // Corrida com um teto de 150ms — cobre o caso comum (fonte já em
+          // cache, resolve quase na hora) sem arriscar deixar o conteúdo
+          // sem tamanho nenhum por muito tempo se a fonte demorar de verdade
+          // (rede lenta): nesse caso pior, ainda sobra a reconfirmação de
+          // 350ms/1200ms mais abaixo pra corrigir.
+          await Promise.race([document.fonts.ready, new Promise((resolve) => setTimeout(resolve, 150))]);
+        } catch {
+          // segue sem esperar se isso falhar por qualquer motivo
+        }
+      }
+      if (!cancelado) medir();
+    }
+    medirDepoisDaFonte();
     // Reconfirma um pouco depois do mount — vídeo/iframe (YouTube, mídia
     // enviada) carrega de forma assíncrona e pode crescer DEPOIS da
     // primeira medição, sem disparar resize nenhum.
@@ -175,6 +198,7 @@ export function ScrollFit({
     window.visualViewport?.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
     return () => {
+      cancelado = true;
       clearTimeout(t1);
       clearTimeout(t2);
       window.removeEventListener("resize", onResize);
