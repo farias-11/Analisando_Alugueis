@@ -19,6 +19,25 @@ type Marca = { carga: number | null; repeticoes: number | null } | null | undefi
 
 const TABS = ["Geral", "Instruções", "Alvo", "Carga Máx."] as const;
 
+/** Primeiro número de uma faixa de repetições tipo "12 a 15" ou "12-15" —
+ * só o valor inicial sugerido no campo. Antes cortava só no "-", então faixa
+ * cadastrada com "a" (comum em português, ex: "12 a 15") aparecia por
+ * INTEIRA dentro do campo de repetições em vez de só o "12". */
+function primeiroNumeroDaFaixa(faixa: string): string {
+  return faixa.match(/\d+/)?.[0] ?? "";
+}
+
+/** Nunca retorna NaN, diferente de chamar Number() direto — um NaN entrando
+ * no estado local (ex: repeticoes: NaN, de alguém salvando o valor sugerido
+ * "12 a 15" sem editar) sobrevive a qualquer "??" de fallback depois (NaN
+ * não é null/undefined, então "??" não substitui) e volta a aparecer pro
+ * aluno como o texto literal "NaN" no campo. */
+function paraInteiroOuNull(valor: string): number | null {
+  if (!valor.trim()) return null;
+  const n = Number(valor);
+  return Number.isNaN(n) ? null : n;
+}
+
 function formatarTempo(segundos: number) {
   const m = Math.floor(segundos / 60);
   const s = segundos % 60;
@@ -199,10 +218,12 @@ export function ExecucaoClient({
   const faseAtual = faseDaSerie(serieAtual);
   const valorAtual = valorGlobal(serieAtual);
   const valorAtualParceiro = valoresPorSerieParceiro[serieAtual];
-  const [reps, setReps] = useState(String(valorAtual?.repeticoes ?? faseAtual.alvo.repeticoes.split("-")[0] ?? ""));
+  const [reps, setReps] = useState(
+    String(valorAtual?.repeticoes ?? primeiroNumeroDaFaixa(faseAtual.alvo.repeticoes))
+  );
   const [carga, setCarga] = useState(String(valorAtual?.carga ?? faseAtual.alvo.carga_inicial ?? ""));
   const [repsParceiro, setRepsParceiro] = useState(
-    String(valorAtualParceiro?.repeticoes ?? parceiro?.repeticoes.split("-")[0] ?? "")
+    String(valorAtualParceiro?.repeticoes ?? (parceiro ? primeiroNumeroDaFaixa(parceiro.repeticoes) : ""))
   );
   const [cargaParceiro, setCargaParceiro] = useState(String(valorAtualParceiro?.carga ?? parceiro?.carga_inicial ?? ""));
   const [pending, startTransition] = useTransition();
@@ -227,11 +248,11 @@ export function ExecucaoClient({
     const { ehAquecimento, alvo, serieLocal } = faseDaSerie(n);
     const valoresDaFase = continuacao && !ehAquecimento ? (valoresContinuacao ?? valoresPorSerieContinuacao) : valores;
     const v = valoresDaFase[serieLocal];
-    setReps(String(v?.repeticoes ?? alvo.repeticoes.split("-")[0] ?? ""));
+    setReps(String(v?.repeticoes ?? primeiroNumeroDaFaixa(alvo.repeticoes)));
     setCarga(String(v?.carga ?? alvo.carga_inicial ?? ""));
     if (parceiro) {
       const vp = (valoresParceiro ?? valoresPorSerieParceiro)[n];
-      setRepsParceiro(String(vp?.repeticoes ?? parceiro.repeticoes.split("-")[0] ?? ""));
+      setRepsParceiro(String(vp?.repeticoes ?? primeiroNumeroDaFaixa(parceiro.repeticoes)));
       setCargaParceiro(String(vp?.carga ?? parceiro.carga_inicial ?? ""));
     }
   }
@@ -244,9 +265,9 @@ export function ExecucaoClient({
 
   function salvarSerie() {
     const cargaNum = parseDecimalBR(carga);
-    const repsNum = reps ? Number(reps) : null;
+    const repsNum = paraInteiroOuNull(reps);
     const cargaNumParceiro = parceiro ? parseDecimalBR(cargaParceiro) : null;
-    const repsNumParceiro = parceiro ? (repsParceiro ? Number(repsParceiro) : null) : null;
+    const repsNumParceiro = parceiro ? paraInteiroOuNull(repsParceiro) : null;
     const serieSalva = serieAtual;
     const { ehAquecimento, serieLocal } = faseDaSerie(serieSalva);
     const aulaExercicioIdAtivo = continuacao && !ehAquecimento ? continuacao.id : aulaExercicio.id;
@@ -316,9 +337,9 @@ export function ExecucaoClient({
 
   function finalizarTodas() {
     const cargaNum = parseDecimalBR(carga);
-    const repsNum = reps ? Number(reps) : null;
+    const repsNum = paraInteiroOuNull(reps);
     const cargaNumParceiro = parceiro ? parseDecimalBR(cargaParceiro) : null;
-    const repsNumParceiro = parceiro ? (repsParceiro ? Number(repsParceiro) : null) : null;
+    const repsNumParceiro = parceiro ? paraInteiroOuNull(repsParceiro) : null;
     startTransition(async () => {
       try {
         if (!navigator.onLine) throw new Error("offline");

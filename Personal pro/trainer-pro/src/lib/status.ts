@@ -1,5 +1,41 @@
 import type { StatusCiclo } from "./types";
 
+function partesDataBrasil(referencia: Date) {
+  const partes = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(referencia);
+  const valor = (tipo: string) => Number(partes.find((p) => p.type === tipo)!.value);
+  return { ano: valor("year"), mes: valor("month"), dia: valor("day") };
+}
+
+/** Meia-noite de HOJE no horário de Brasília, como instante exato (não meia-
+ * noite no fuso do servidor) — a Vercel roda em UTC, então "hoje" calculado
+ * com new Date()+setHours(0,0,0,0) direto ficava até 3h deslocado do dia
+ * real do aluno no Brasil (mesmo bug já visto aqui na saudação, ver
+ * saudacaoPorHorario). Isso já causou treino registrado à noite contando
+ * pro dia errado, e a rotação do "próximo treino" ficando presa num treino
+ * que na visão do aluno já tinha sido concluído no dia anterior. */
+export function inicioDoDiaBrasil(referencia: Date = new Date()): Date {
+  const { ano, mes, dia } = partesDataBrasil(referencia);
+  // meia-noite em SP = 03:00 UTC (UTC-3 fixo — Brasil não tem mais horário
+  // de verão desde 2019, então essa conta não varia ao longo do ano)
+  return new Date(Date.UTC(ano, mes - 1, dia, 3, 0, 0, 0));
+}
+
+/** Início (domingo 00:00, horário de Brasília) da semana civil atual — NÃO
+ * "7 dias atrás": um treino feito quinta ou sexta continuava marcado como
+ * "feito essa semana" na segunda-feira seguinte, porque só tinham passado
+ * poucos dias, mesmo a semana civil já tendo virado no domingo. */
+export function inicioDaSemanaAtualBrasil(referencia: Date = new Date()): Date {
+  const { ano, mes, dia } = partesDataBrasil(referencia);
+  // dia da semana é um fato de calendário (não depende de fuso horário)
+  const diaDaSemana = new Date(ano, mes - 1, dia).getDay(); // 0 = domingo
+  return new Date(Date.UTC(ano, mes - 1, dia - diaDaSemana, 3, 0, 0, 0));
+}
+
 export function statusCiclo(dataFim: string): StatusCiclo {
   const hoje = new Date();
   hoje.setHours(0, 0, 0, 0);

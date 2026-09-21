@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { inicioDoDiaBrasil, inicioDaSemanaAtualBrasil } from "@/lib/status";
 import type { Aula, AulaExercicio, Ciclo, Exercicio, Execucao } from "@/lib/types";
 
 export async function getCicloAtivo(alunoId: string): Promise<Ciclo | null> {
@@ -101,7 +102,11 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
 
   const usaDiasFixos = aulas.some((a) => a.dias_semana && a.dias_semana.length > 0);
   if (usaDiasFixos) {
-    const hoje = new Date().getDay(); // 0=domingo..6=sábado
+    // getUTCDay() (não getDay()) porque inicioDoDiaBrasil() já devolve meia-
+    // noite de Brasília como instante UTC — usar new Date().getDay() puro
+    // dava o dia da semana errado no fuso do servidor (Vercel roda em UTC),
+    // trocando de dia ~3h antes da meia-noite real no Brasil.
+    const hoje = inicioDoDiaBrasil().getUTCDay(); // 0=domingo..6=sábado
     return aulas.find((a) => a.dias_semana?.includes(hoje)) ?? null;
   }
 
@@ -130,8 +135,7 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
   // Só avança pra próxima da sequência (mesmo no mesmo dia) quando o treino
   // de hoje está DE VERDADE 100% concluído — senão ficava reoferecendo um
   // treino que o aluno já tinha acabado de terminar.
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  const hojeInicio = inicioDoDiaBrasil();
   const feitaHoje = linhas.find((l) => new Date(l.data) >= hojeInicio);
   if (feitaHoje) {
     const aulaHojeId = feitaHoje.aula_exercicios!.aula_id;
@@ -161,8 +165,7 @@ export async function getStatusExerciciosAulaHoje(alunoId: string, aulaId: strin
 
   const supabase = await createClient();
   const ids = exercicios.map((e) => e.id);
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  const hojeInicio = inicioDoDiaBrasil();
   const { data: execs } = await supabase
     .from("execucoes")
     .select("aula_exercicio_id")
@@ -257,8 +260,7 @@ export async function getExecucoesDeHoje(
   aulaExercicioId: string
 ): Promise<Record<number, { carga: number | null; repeticoes: number | null }>> {
   const supabase = await createClient();
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  const hojeInicio = inicioDoDiaBrasil();
 
   const { data } = await supabase
     .from("execucoes")
@@ -283,8 +285,7 @@ export async function getInicioTreinoHoje(alunoId: string, aulaExercicioIds: str
   if (aulaExercicioIds.length === 0) return null;
   const supabase = await createClient();
 
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  const hojeInicio = inicioDoDiaBrasil();
 
   const { data } = await supabase
     .from("execucoes")
@@ -317,10 +318,15 @@ export async function getExecucoesRecentes(
 /** Recebe as aulas do ciclo ativo já buscadas pelo chamador (evita repetir
  * a mesma consulta de ciclo+aulas que a página já fez em paralelo).
  *
- * `aulasFeitasHojeIds` sai de graça da MESMA linha buscada aqui (a janela de
- * 7 dias já inclui hoje, e cada linha já tem `data`) — antes a Home fazia
+ * `aulasFeitasHojeIds` sai de graça da MESMA linha buscada aqui (a semana
+ * atual já inclui hoje, e cada linha já tem `data`) — antes a Home fazia
  * mais 2 idas ao banco só pra saber "o aluno já fez o treino de hoje?"
- * (aulaConcluidaHoje, removida). Evita esse passo extra e sequencial. */
+ * (aulaConcluidaHoje, removida). Evita esse passo extra e sequencial.
+ *
+ * A janela é a semana CIVIL atual (domingo até agora, horário de Brasília),
+ * não "últimos 7 dias" — isso era um bug real: treino feito quinta ou sexta
+ * continuava marcado como "feito essa semana" na segunda seguinte, porque só
+ * tinham passado poucos dias, mesmo a semana já tendo virado no domingo. */
 export async function getAderenciaSemana(alunoId: string, aulas: Aula[]): Promise<{
   concluidas: number;
   meta: number;
@@ -328,15 +334,14 @@ export async function getAderenciaSemana(alunoId: string, aulas: Aula[]): Promis
 }> {
   if (aulas.length === 0) return { concluidas: 0, meta: 0, aulasFeitasHojeIds: new Set() };
   const supabase = await createClient();
-  const seteDiasAtras = new Date(Date.now() - 7 * 86_400_000).toISOString();
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  const inicioSemana = inicioDaSemanaAtualBrasil();
+  const hojeInicio = inicioDoDiaBrasil();
 
   const { data } = await supabase
     .from("execucoes")
     .select("aula_exercicio_id, data, aula_exercicios(aula_id)")
     .eq("aluno_id", alunoId)
-    .gte("data", seteDiasAtras);
+    .gte("data", inicioSemana.toISOString());
 
   const linhas = (data ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[];
 

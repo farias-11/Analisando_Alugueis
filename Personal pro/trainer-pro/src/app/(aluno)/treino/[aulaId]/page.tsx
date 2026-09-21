@@ -1,6 +1,7 @@
 import { requireAluno } from "@/lib/data/current-user";
 import { getExerciciosDaAula } from "@/lib/data/aluno";
 import { createClient } from "@/lib/supabase/server";
+import { inicioDoDiaBrasil } from "@/lib/status";
 import { cn } from "@/lib/utils";
 import { TopBar } from "@/components/nav/top-bar";
 import { TreinoTimer } from "@/components/treino-timer";
@@ -29,8 +30,7 @@ export default async function AulaPage({
   // hoje) e acha o início do treino (pro cronômetro) na MESMA query — os dois
   // vêm do mesmo conjunto de linhas, não precisa de duas idas ao banco
   const idsTodos = exerciciosBrutos.map((e) => e.id);
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  const hojeInicio = inicioDoDiaBrasil();
   const { data: execucoesHoje } = idsTodos.length
     ? await supabase
         .from("execucoes")

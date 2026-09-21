@@ -1,6 +1,7 @@
 import { requireAluno } from "@/lib/data/current-user";
 import { createClient } from "@/lib/supabase/server";
 import { getExerciciosDaAula, getCicloAtivo, getAulasDoCiclo, getAderenciaSemana } from "@/lib/data/aluno";
+import { inicioDoDiaBrasil } from "@/lib/status";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ButtonLink } from "@/components/ui/button";
@@ -30,8 +31,7 @@ export default async function TreinoConcluidoPage({
     : { concluidas: 0, meta: 0 };
 
   const aulaExercicioIds = exercicios.map((e) => e.id);
-  const hojeInicio = new Date();
-  hojeInicio.setHours(0, 0, 0, 0);
+  const hojeInicio = inicioDoDiaBrasil();
 
   const { data: execHoje } = aulaExercicioIds.length
     ? await supabase

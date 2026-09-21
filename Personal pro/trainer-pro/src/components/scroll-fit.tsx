@@ -193,10 +193,33 @@ export function ScrollFit({
     // primeira medição, sem disparar resize nenhum.
     const t1 = setTimeout(() => medir(), 350);
     const t2 = setTimeout(() => medir(), 1200);
-    const onResize = () => medir();
+
+    // O teclado do celular abrindo TAMBÉM dispara resize do visualViewport —
+    // e como o nav.safe-bottom (position: fixed) não confiavelmente
+    // acompanha essa mudança (varia por navegador), medir() de novo nesse
+    // instante calculava contra uma posição de nav errada, esticando o
+    // container pra uma altura grande demais (o "vão em branco enorme" ao
+    // tocar num campo, visto aqui). Enquanto o campo focado for um
+    // input/textarea, assume que o resize é o teclado abrindo/fechando e
+    // NÃO remede — o layout por trás do teclado fica como estava antes dele
+    // abrir, e reconfere de verdade só quando o campo perde o foco (teclado
+    // fechou de vez).
+    function campoDeTextoFocado() {
+      const el = document.activeElement;
+      return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+    }
+    const onResize = () => {
+      if (campoDeTextoFocado()) return;
+      medir();
+    };
+    const onFocusOut = () => {
+      // espera o teclado terminar de fechar antes de remedir
+      setTimeout(() => medir(), 100);
+    };
     window.addEventListener("resize", onResize);
     window.visualViewport?.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
+    document.addEventListener("focusout", onFocusOut);
     return () => {
       cancelado = true;
       clearTimeout(t1);
@@ -204,6 +227,7 @@ export function ScrollFit({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
+      document.removeEventListener("focusout", onFocusOut);
     };
   }, [desktop, rolar]);
 

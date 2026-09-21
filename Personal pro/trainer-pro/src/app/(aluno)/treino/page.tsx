@@ -1,6 +1,7 @@
 import { requireAluno } from "@/lib/data/current-user";
 import { getAulasDoCiclo, getCicloAtivo, aulaDoDia, getExerciciosDaAula } from "@/lib/data/aluno";
 import { createClient } from "@/lib/supabase/server";
+import { inicioDaSemanaAtualBrasil } from "@/lib/status";
 import { TopBar } from "@/components/nav/top-bar";
 import { ScrollFit } from "@/components/scroll-fit";
 import { Card } from "@/components/ui/card";
@@ -50,11 +51,12 @@ export default async function TreinoDoDiaPage() {
 
   const aulas = await getAulasDoCiclo(ciclo.id);
   const supabase = await createClient();
-  // janela de 7 dias (não só "hoje") — mesmo critério do "Meta semanal" da
-  // Home (getAderenciaSemana): treino feito terça continua marcado até a
-  // semana virar, não só no dia em que foi feito
-  const seteDiasAtras = new Date();
-  seteDiasAtras.setDate(seteDiasAtras.getDate() - 7);
+  // semana civil atual (domingo até agora, horário de Brasília) — mesmo
+  // critério do "Meta semanal" da Home (getAderenciaSemana): treino feito
+  // terça continua marcado até a semana virar, não "últimos 7 dias" (isso
+  // era um bug real: treino de quinta/sexta ainda aparecia "feito essa
+  // semana" na segunda seguinte, mesmo a semana já tendo virado no domingo).
+  const inicioSemana = inicioDaSemanaAtualBrasil();
 
   // aulaDoDia (própria query interna) e os exercícios de cada aula não
   // dependem um do outro — rodam em paralelo. Exercícios de todas as aulas
@@ -83,7 +85,7 @@ export default async function TreinoDoDiaPage() {
         .select("aula_exercicio_id")
         .eq("aluno_id", aluno.id)
         .in("aula_exercicio_id", todosAulaExercicioIds)
-        .gte("data", seteDiasAtras.toISOString())
+        .gte("data", inicioSemana.toISOString())
     : { data: [] as { aula_exercicio_id: string }[] };
   const aulaExercicioIdsFeitosNaSemana = new Set((execucoesSemana ?? []).map((e) => e.aula_exercicio_id));
 
