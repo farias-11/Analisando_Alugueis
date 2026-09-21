@@ -245,7 +245,15 @@ export function ScrollFit({
         constrangido &&
           (rolar
             ? "overflow-y-auto overscroll-contain"
-            : `flex flex-col overflow-hidden ${topo ? "justify-start" : "justify-center"}`),
+            : // focus-within:overflow-y-auto — enquanto o teclado do celular
+              // está aberto (um campo aqui dentro focado), deixa o navegador
+              // rolar a página até o campo de verdade, em vez de brigar com
+              // ele: overflow-hidden sem nenhum espaço "de sobra" pra rolar
+              // fazia o navegador tentar mesmo assim (scroll nativo de campo
+              // focado) e sobrava um vão em branco enorme embaixo, sem nada
+              // pra preencher esse scroll. Volta a overflow-hidden assim que
+              // o campo perde o foco (teclado fecha).
+              `flex flex-col overflow-hidden focus-within:overflow-y-auto focus-within:overscroll-contain ${topo ? "justify-start" : "justify-center"}`),
         className
       )}
     >
