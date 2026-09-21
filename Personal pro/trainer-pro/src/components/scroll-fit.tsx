@@ -77,6 +77,13 @@ export function ScrollFit({
   // medir de novo, mas nada remedia depois que os vars aplicavam).
   const [escala, setEscala] = useState(0);
   const [desktop, setDesktop] = useState(false);
+  // Enquanto true, a régua de altura/overflow-hidden é DESLIGADA de vez (nem
+  // aplica inline style, nem classe) — o container volta ao fluxo normal da
+  // página, exatamente como qualquer página comum. É o teclado do celular
+  // abrindo (um input aqui dentro ganhou foco) — ver useEffect de
+  // focusin/focusout abaixo e o comentário longo perto de onResize.
+  const [focado, setFocado] = useState(false);
+  const focadoRef = useRef(false);
 
   useEffect(() => {
     // Sempre começa "false" (igual ao HTML do servidor, que não tem window
@@ -91,6 +98,41 @@ export function ScrollFit({
     return () => mq.removeEventListener("change", onChange);
   }, []);
 
+  // Teclado do celular abrindo/fechando = um input aqui dentro ganhando ou
+  // perdendo foco. focusin/focusout (diferente de focus/blur) borbulham, dá
+  // pra ouvir os dois no container inteiro com um listener só. Setar
+  // focadoRef ANTES do state (útil pro medir() de baixo, que lê a ref pra
+  // nunca pegar um valor "preso" de quando a função foi criada) e o state
+  // (useState) pra realmente tirar a altura/overflow-hidden do JSX renderizado.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    function estaFocadoAgora() {
+      return !!el && el.contains(document.activeElement) && document.activeElement !== el;
+    }
+    function onFocusIn() {
+      focadoRef.current = true;
+      setFocado(true);
+    }
+    function onFocusOut() {
+      // troca de campo = focusout do antigo seguido de focusin do novo; um
+      // pequeno atraso evita "piscar" de volta pro modo restrito no meio
+      // dessa troca (senão o teclado fecharia e abriria nesse intervalo).
+      setTimeout(() => {
+        if (!estaFocadoAgora()) {
+          focadoRef.current = false;
+          setFocado(false);
+        }
+      }, 50);
+    }
+    el.addEventListener("focusin", onFocusIn);
+    el.addEventListener("focusout", onFocusOut);
+    return () => {
+      el.removeEventListener("focusin", onFocusIn);
+      el.removeEventListener("focusout", onFocusOut);
+    };
+  }, []);
+
   useLayoutEffect(() => {
     // Desktop/paisagem curta: nada de altura forçada, a página rola normal
     // (mesmo critério da Home — não existe BottomNav fixa pra medir contra).
@@ -99,6 +141,18 @@ export function ScrollFit({
     // tentativas > 0 = chamada de reconfirmação (ver abaixo) — evita
     // recursão infinita se por algum motivo nunca convergir.
     function medir(tentativas = 0, escalaAtual = rolar ? 0 : 1) {
+      // Teclado provavelmente aberto (ver useEffect de focusin/focusout
+      // acima) — não mexe em NADA. Um fix anterior só "congelava" a altura
+      // nesse caso, mas o container continuava overflow-hidden do tamanho
+      // de tela inteira (maior que a área realmente visível acima do
+      // teclado) e sem nada pra rolar internamente — sobrava um vão em
+      // branco enorme embaixo do campo (visto num iPhone real). Agora,
+      // enquanto focado, o JSX nem aplica altura nem overflow-hidden (ver
+      // "constrangido" mais abaixo) — o container volta ao fluxo normal da
+      // página, e o navegador rola a página inteira até o campo sozinho,
+      // do jeito que já faz em qualquer página sem altura forçada.
+      if (focadoRef.current) return;
+
       const el = ref.current;
       if (!el) return;
       const viewportH = window.visualViewport?.height ?? window.innerHeight;
@@ -194,32 +248,13 @@ export function ScrollFit({
     const t1 = setTimeout(() => medir(), 350);
     const t2 = setTimeout(() => medir(), 1200);
 
-    // O teclado do celular abrindo TAMBÉM dispara resize do visualViewport —
-    // e como o nav.safe-bottom (position: fixed) não confiavelmente
-    // acompanha essa mudança (varia por navegador), medir() de novo nesse
-    // instante calculava contra uma posição de nav errada, esticando o
-    // container pra uma altura grande demais (o "vão em branco enorme" ao
-    // tocar num campo, visto aqui). Enquanto o campo focado for um
-    // input/textarea, assume que o resize é o teclado abrindo/fechando e
-    // NÃO remede — o layout por trás do teclado fica como estava antes dele
-    // abrir, e reconfere de verdade só quando o campo perde o foco (teclado
-    // fechou de vez).
-    function campoDeTextoFocado() {
-      const el = document.activeElement;
-      return !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
-    }
-    const onResize = () => {
-      if (campoDeTextoFocado()) return;
-      medir();
-    };
-    const onFocusOut = () => {
-      // espera o teclado terminar de fechar antes de remedir
-      setTimeout(() => medir(), 100);
-    };
+    // O teclado do celular abrindo/fechando TAMBÉM dispara resize do
+    // visualViewport — medir() já ignora isso sozinho (via focadoRef, ver
+    // acima), então esse listener não precisa de nenhuma lógica extra aqui.
+    const onResize = () => medir();
     window.addEventListener("resize", onResize);
     window.visualViewport?.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
-    document.addEventListener("focusout", onFocusOut);
     return () => {
       cancelado = true;
       clearTimeout(t1);
@@ -227,11 +262,23 @@ export function ScrollFit({
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
-      document.removeEventListener("focusout", onFocusOut);
     };
-  }, [desktop, rolar]);
+    // "focado" de propósito nas deps: quando ele vira false (campo perdeu o
+    // foco, teclado fechou), este efeito inteiro re-roda e chama medir() nem
+    // que seja só isso — é assim que o layout volta a caber certinho depois
+    // do teclado fechar, sem precisar de um segundo mecanismo separado só
+    // pra essa reconfirmação.
+  }, [desktop, rolar, focado]);
 
-  const constrangido = !desktop && altura !== null;
+  // "focado" desliga a régua de altura/overflow-hidden por completo (não só
+  // troca pra scroll interno) — com um input aqui dentro focado, o container
+  // volta ao fluxo normal de qualquer página, e o navegador rola a PÁGINA
+  // INTEIRA até o campo sozinho, do jeito que já sabe fazer. Uma tentativa
+  // anterior só trocava pra overflow-y-auto mantendo a altura travada (do
+  // tamanho da tela cheia, sem o teclado) — como o conteúdo já cabia nessa
+  // altura, não tinha o que rolar de verdade, e sobrava um vão em branco
+  // enorme embaixo do campo mesmo assim (confirmado com print de iPhone real).
+  const constrangido = !desktop && altura !== null && !focado;
   const varsEscala = varsDaEscala(escala) as React.CSSProperties;
 
   return (
@@ -245,15 +292,7 @@ export function ScrollFit({
         constrangido &&
           (rolar
             ? "overflow-y-auto overscroll-contain"
-            : // focus-within:overflow-y-auto — enquanto o teclado do celular
-              // está aberto (um campo aqui dentro focado), deixa o navegador
-              // rolar a página até o campo de verdade, em vez de brigar com
-              // ele: overflow-hidden sem nenhum espaço "de sobra" pra rolar
-              // fazia o navegador tentar mesmo assim (scroll nativo de campo
-              // focado) e sobrava um vão em branco enorme embaixo, sem nada
-              // pra preencher esse scroll. Volta a overflow-hidden assim que
-              // o campo perde o foco (teclado fecha).
-              `flex flex-col overflow-hidden focus-within:overflow-y-auto focus-within:overscroll-contain ${topo ? "justify-start" : "justify-center"}`),
+            : `flex flex-col overflow-hidden ${topo ? "justify-start" : "justify-center"}`),
         className
       )}
     >
