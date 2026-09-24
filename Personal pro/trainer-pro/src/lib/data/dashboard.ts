@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { diasDesde, diasRestantes as calcDiasRestantes } from "@/lib/status";
+import { getStatusExerciciosAulaDesde } from "@/lib/data/aluno";
+import { diasDesde, diasRestantes as calcDiasRestantes, inicioDoDiaBrasil } from "@/lib/status";
 import { buildWhatsappLink, mensagemCobranca } from "@/lib/whatsapp";
 
 export type TipoRadar =
@@ -427,11 +428,13 @@ async function calcularAderenciaMedia(
     aulasPorCiclo.set(a.ciclo_id, (aulasPorCiclo.get(a.ciclo_id) ?? 0) + 1);
   }
 
-  // sessões (aula x dia) separadas por janela — atual e anterior — não só
-  // quais aulas já foram feitas alguma vez, senão o teto ficaria baixo
-  // independente de quanto o aluno treina
-  const sessoesAtualPorAluno = new Map<string, Set<string>>();
-  const sessoesAnteriorPorAluno = new Map<string, Set<string>>();
+  // "sessão feita" (aluno x aula x dia) só conta de verdade quando o treino
+  // INTEIRO daquele dia foi concluído — mesma regra de getResumoEvolucao (ver
+  // lá o histórico do bug: 1 série de 1 exercício bastava pra inflar a
+  // aderência). Dia calculado via inicioDoDiaBrasil, não data.slice(0,10) cru
+  // (UTC) — mesmo bug de fuso já corrigido lá, que fragmentava sessão feita à
+  // noite em dois dias.
+  const paresCandidatos = new Map<string, { alunoId: string; aulaId: string; diaInicio: Date; janela: "atual" | "anterior" }>();
   for (const e of (execs ?? []) as unknown as {
     aluno_id: string;
     data: string;
@@ -439,12 +442,26 @@ async function calcularAderenciaMedia(
   }[]) {
     const aulaId = e.aula_exercicios?.aula_id;
     if (!aulaId) continue;
-    const dataExec = new Date(e.data);
-    const chave = `${aulaId}_${e.data.slice(0, 10)}`;
-    const mapa = dataExec >= inicioJanela ? sessoesAtualPorAluno : sessoesAnteriorPorAluno;
-    const set = mapa.get(e.aluno_id) ?? new Set<string>();
-    set.add(chave);
-    mapa.set(e.aluno_id, set);
+    const diaInicio = inicioDoDiaBrasil(new Date(e.data));
+    const janela = diaInicio >= inicioJanela ? "atual" : "anterior";
+    paresCandidatos.set(`${e.aluno_id}_${aulaId}_${diaInicio.getTime()}`, { alunoId: e.aluno_id, aulaId, diaInicio, janela });
+  }
+  const statusPorPar = await Promise.all(
+    Array.from(paresCandidatos.values()).map(async (par) => {
+      const diaFim = new Date(par.diaInicio.getTime() + 86_400_000);
+      const status = await getStatusExerciciosAulaDesde(par.alunoId, par.aulaId, par.diaInicio, diaFim);
+      return { ...par, ...status };
+    })
+  );
+
+  const sessoesAtualPorAluno = new Map<string, Set<string>>();
+  const sessoesAnteriorPorAluno = new Map<string, Set<string>>();
+  for (const s of statusPorPar) {
+    if (!s.todosConcluidos) continue;
+    const mapa = s.janela === "atual" ? sessoesAtualPorAluno : sessoesAnteriorPorAluno;
+    const set = mapa.get(s.alunoId) ?? new Set<string>();
+    set.add(`${s.aulaId}_${s.diaInicio.getTime()}`);
+    mapa.set(s.alunoId, set);
   }
 
   const percentual = (sessoesPorAluno: Map<string, Set<string>>) => {

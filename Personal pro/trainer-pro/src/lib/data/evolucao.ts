@@ -18,11 +18,13 @@ export interface ResumoEvolucao {
   aderenciaPct: number;
   aderenciaTendencia: Tendencia;
   /** Dias desde a última execução registrada, de QUALQUER ciclo/aula — null
-   * se nunca treinou. Deliberadamente não depende do ciclo ativo: renovar o
-   * ciclo cria aula_exercicios novos, então a aderência (que só conta sessão
-   * das aulas do ciclo atual) zera na hora — usar aderenciaPct pra detectar
-   * "sumiu" acusaria falso positivo em todo aluno que renovou o ciclo, por
-   * mais que tenha treinado ontem. */
+   * se nunca treinou. Deliberadamente não depende do ciclo ativo (diferente
+   * de aderenciaPct, que agora É por ciclo de propósito — ver comentário lá):
+   * um aluno que renovou o ciclo ontem e treinou ontem não pode aparecer como
+   * "sumiu" só porque a aderência do ciclo novo ainda está no começo. São
+   * duas perguntas diferentes — "sumiu?" (sempre olha pro treino mais
+   * recente, não importa o ciclo) vs "está cumprindo o plano atual?"
+   * (reseta a cada ciclo novo). */
   diasDesdeUltimoTreino: number | null;
 }
 
@@ -118,32 +120,23 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
   const cargaTendencia: Tendencia =
     cargaDeltaPct === null ? "neutra" : cargaDeltaPct > 2 ? "positiva" : cargaDeltaPct < -2 ? "negativa" : "neutra";
 
-  // Aderência: sessões de treino (aula x dia, de QUALQUER ciclo — não só o
-  // ativo) numa janela vs. meta (aulas do ciclo ATUAL x semanas na janela).
-  // A janela é os últimos 30 dias, OU desde a primeira execução já registrada
-  // (de qualquer ciclo) se isso for mais recente — senão quem treina há 3
-  // dias aparece com aderência baixíssima só por dividir pelo mês inteiro.
-  //
-  // De propósito NÃO usa ciclo.data_inicio pra isso (era a versão anterior
-  // desse código): renovar o ciclo cria aula_exercicios novos com
-  // data_inicio = hoje, e um aluno que treinou ontem só não teria NENHUMA
-  // sessão dentro da janela — aderência cairia pra 0% a cada renovação,
-  // mesmo pra quem nunca treinou menos. A meta ainda usa o ciclo atual (é o
-  // plano vigente), mas as sessões contam independente de qual ciclo/aula
-  // exata elas pertencem — é a mesma sessão de treino, só mudou o registro.
+  // Aderência: sessões de treino (aula x dia) completas DENTRO DO CICLO ATUAL
+  // vs. meta (aulas do ciclo x semanas decorridas desde que ele começou).
+  // De propósito USA ciclo.data_inicio como início da janela — pedido
+  // explícito do produto: "trocou o ciclo, trocou a aderência". Renovar o
+  // ciclo agora reseta a aderência de verdade (começa do 0%, sobe conforme o
+  // aluno treina o plano NOVO) — isso é intencional, não bug. Ver
+  // diasDesdeUltimoTreino acima pra "sumiu?", que é a pergunta que continua
+  // cross-ciclo.
   let aderenciaPct = 0;
   if (ciclo) {
-    const trintaDiasAtrasData = new Date(Date.now() - 30 * 86_400_000);
-
-    const [{ data: aulas }, { data: primeiraExecucao }] = await Promise.all([
-      supabase.from("aulas").select("id").eq("ciclo_id", ciclo.id),
-      supabase.from("execucoes").select("data").eq("aluno_id", alunoId).order("data", { ascending: true }).limit(1).maybeSingle(),
-    ]);
-
-    const primeiraExecucaoData = primeiraExecucao ? new Date(primeiraExecucao.data) : null;
-    const inicioJanela =
-      primeiraExecucaoData && primeiraExecucaoData > trintaDiasAtrasData ? primeiraExecucaoData : trintaDiasAtrasData;
+    const [anoCiclo, mesCiclo, diaCiclo] = ciclo.data_inicio.split("-").map(Number);
+    // mesma conversão de inicioDoDiaBrasil (meia-noite em SP = 03:00 UTC) —
+    // ciclo.data_inicio é só a data (YYYY-MM-DD), sem horário/fuso próprio.
+    const inicioJanela = new Date(Date.UTC(anoCiclo, mesCiclo - 1, diaCiclo, 3, 0, 0, 0));
     const diasNaJanela = Math.max(1, Math.round((Date.now() - inicioJanela.getTime()) / 86_400_000));
+
+    const { data: aulas } = await supabase.from("aulas").select("id").eq("ciclo_id", ciclo.id);
 
     const { data: execs } = await supabase
       .from("execucoes")

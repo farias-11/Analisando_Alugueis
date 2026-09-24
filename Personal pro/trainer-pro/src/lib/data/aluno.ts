@@ -154,17 +154,30 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
   return aulasOrdenadas[(indiceAtual + 1) % aulasOrdenadas.length];
 }
 
+// ---------------------------------------------------------------------------
+// REGRA (não repetir o bug de 24/09): "treino/aula concluído" SEMPRE significa
+// contagem de série >= série exigida em CADA exercício da aula (aquecimento +
+// continuação do mesmo exercício contam como 1 item; cardio conta como feito
+// com qualquer registro). NUNCA "teve pelo menos uma execução registrada" —
+// isso já causou aula marcada "Concluído" com 1 série de 1 exercício feita, e
+// o mesmo bug apareceu de forma independente em 3 lugares (meta semanal, card
+// da aba Treino, Aderência) antes de virar essa função única. Qualquer
+// indicador novo de "completou o treino" (badge, %, streak, o que for) deve
+// usar getStatusExerciciosAulaDesde — ou, se o formato de dado não permitir
+// (ex: view já monta um item por-exercício-com-bi-set, como em
+// treino/[aulaId]/page.tsx), repetir a MESMA regra (contagem >= series) e
+// deixar um comentário apontando pra cá.
+// ---------------------------------------------------------------------------
+
 /** Status de cada exercício de uma aula num período [desde, até) (aquecimento +
  * continuação do mesmo exercício contam como um item só; cardio conta como
  * feito com qualquer registro no período) — parametrizado por "desde"/"até"
  * pra dar pra checar "terminou hoje" (getStatusExerciciosAulaHoje), "terminou
- * essa semana" (getAderenciaSemana) e "terminou NESSE DIA especificamente"
- * (getResumoEvolucao, aderência — "até" é o dia seguinte) com a MESMA regra
- * de "treino inteiro" (todo exercício com as séries batidas), sem duplicar a
- * lógica de agrupamento aquecimento/bi-set/cardio em três lugares — bug real
- * já visto aqui: tanto a meta semanal quanto a aderência contavam a
- * sessão/aula como feita com só 1 série de 1 exercício registrada, longe do
- * treino inteiro. */
+ * essa semana" (getAderenciaSemana), "terminou o ciclo até agora"
+ * (getResumoEvolucao/aderência, dashboard.ts) e "terminou NESSE DIA
+ * especificamente" ("até" é o dia seguinte) com a MESMA regra de "treino
+ * inteiro" (todo exercício com as séries batidas), sem duplicar a lógica de
+ * agrupamento aquecimento/bi-set/cardio em cada lugar que precisa saber isso. */
 export async function getStatusExerciciosAulaDesde(alunoId: string, aulaId: string, desde: Date, ate?: Date) {
   const exercicios = await getExerciciosDaAula(aulaId);
   if (exercicios.length === 0) {

@@ -77,6 +77,12 @@ export default async function AulaPage({
     });
   }
 
+  // REGRA: "concluído" é sempre contagem de série >= série exigida, nunca
+  // "teve alguma execução". Essa checagem aqui é por-exercício-com-bi-set (pra
+  // já sair pronta pra exibição da linha), então não dá pra reusar
+  // getStatusExerciciosAulaDesde (aluno.ts) direto — mas segue a MESMA regra.
+  // Ver o comentário grande lá pra histórico do porquê isso importa (bug real:
+  // 1 série já bastava pra marcar aula/meta/aderência inteira como feita).
   const itens = itensBrutos.map((item) => {
     const feitoPrincipal = (contagemPorExercicio.get(item.principal.id) ?? 0) >= item.principal.series;
     const feitoContinuacao =
