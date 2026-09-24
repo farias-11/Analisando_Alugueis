@@ -23,6 +23,15 @@ export type ConvidarAlunoState =
  * detecta esse caso (código "email_exists") e gera um link de ACESSO
  * (magiclink) pra essa conta que já existe, vinculando o aluno atual a ela
  * — desde que nenhum outro aluno já esteja usando essa conta.
+ *
+ * NUNCA retorna o `action_link` cru do Supabase (bug real, já em produção):
+ * esse link já é a verificação em si (GET de uso único) — o WhatsApp busca
+ * o link sozinho pra montar a prévia da mensagem ANTES do aluno tocar nele,
+ * o que consome o token na hora. Quando o aluno clica de verdade, o Supabase
+ * já recusa ("Email link is invalid or has expired"). Por isso o link
+ * mandado aponta pra /convite/entrar (página inerte, sem verificação
+ * nenhuma) — só quando alguém toca no botão de lá é que /auth/confirm
+ * verifica o token_hash de verdade.
  */
 async function gerarLinkAcesso(
   alunoId: string,
@@ -36,15 +45,18 @@ async function gerarLinkAcesso(
   // personal pode ter um aluno pendente com o mesmo e-mail (nada impede,
   // cada um cadastra o "seu" aluno) e aí a busca por e-mail vira ambígua.
   const nextAceitar = `/convite/aceitar?alunoId=${alunoId}`;
-  const redirectTo = `${siteUrl}/auth/callback?next=${encodeURIComponent(nextAceitar)}`;
+
+  function linkEntrar(hashed_token: string, verification_type: string) {
+    const params = new URLSearchParams({ token_hash: hashed_token, type: verification_type, next: nextAceitar });
+    return `${siteUrl}/convite/entrar?${params.toString()}`;
+  }
 
   const { data: convite, error: erroConvite } = await admin.auth.admin.generateLink({
     type: "invite",
     email,
-    options: { redirectTo },
   });
   if (!erroConvite && convite) {
-    return { link: convite.properties.action_link };
+    return { link: linkEntrar(convite.properties.hashed_token, convite.properties.verification_type) };
   }
   if (erroConvite?.code !== "email_exists") {
     return { erro: "Não foi possível gerar o link agora. Tente de novo." };
@@ -58,13 +70,12 @@ async function gerarLinkAcesso(
   const { data: acesso, error: erroAcesso } = await admin.auth.admin.generateLink({
     type: "magiclink",
     email,
-    options: { redirectTo },
   });
   if (erroAcesso || !acesso) {
     return { erro: "Esse e-mail já tem uma conta no Duo Flow, mas não consegui gerar o link de acesso. Tente de novo." };
   }
 
-  return { link: acesso.properties.action_link };
+  return { link: linkEntrar(acesso.properties.hashed_token, acesso.properties.verification_type) };
 }
 
 export async function convidarAluno(
