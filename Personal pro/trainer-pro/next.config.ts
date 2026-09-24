@@ -34,10 +34,14 @@ const nextConfig: NextConfig = {
         pathname: "/storage/v1/object/sign/**",
       },
       // capa de exercício na biblioteca, quando o personal só colou um link
-      // do YouTube (sem upload próprio) — ver youtubeThumbnailUrl().
+      // do YouTube ou do Drive (sem upload próprio) — ver videoThumbnailUrl().
       {
         protocol: "https",
         hostname: "img.youtube.com",
+      },
+      {
+        protocol: "https",
+        hostname: "drive.google.com",
       },
     ],
   },

@@ -5,7 +5,7 @@ import { NovoExercicioToggle } from "./novo-exercicio-toggle";
 import { EditarExercicioModal } from "./editar-exercicio-modal";
 import { Button } from "@/components/ui/button";
 import { excluirExercicio, importarBibliotecaPadrao } from "@/app/actions/exercicios";
-import { youtubeThumbnailUrl } from "@/lib/youtube";
+import { videoThumbnailUrl } from "@/lib/video";
 import { Download, Trash2, Video } from "lucide-react";
 import type { Exercicio } from "@/lib/types";
 import Link from "next/link";
@@ -78,7 +78,7 @@ export default async function BibliotecaPage({
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         {(exercicios ?? []).map((ex) => {
-          const thumbnail = youtubeThumbnailUrl(ex.youtube_url);
+          const thumbnail = videoThumbnailUrl(ex.youtube_url);
           const midiaImagem = ex.exercicio_midias?.find((m: { tipo: string; url: string }) => m.tipo === "imagem" || m.tipo === "gif");
           const capa = thumbnail ?? midiaImagem?.url ?? null;
           return (

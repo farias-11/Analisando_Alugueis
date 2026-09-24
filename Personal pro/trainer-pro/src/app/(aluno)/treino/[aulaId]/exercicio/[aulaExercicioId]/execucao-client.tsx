@@ -8,7 +8,7 @@ import { registrarSerie, registrarTodasAsSeries } from "@/app/actions/execucoes"
 import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
 import { ScrollFit } from "@/components/scroll-fit";
-import { youtubeEmbedUrl } from "@/lib/youtube";
+import { videoEmbedUrl } from "@/lib/video";
 import { cn, parseDecimalBR } from "@/lib/utils";
 import { CheckCircle2, ChevronRight, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
@@ -258,7 +258,7 @@ export function ExecucaoClient({
   }
 
   const embedUrl = useMemo(
-    () => youtubeEmbedUrl(aulaExercicio.exercicio.youtube_url),
+    () => videoEmbedUrl(aulaExercicio.exercicio.youtube_url),
     [aulaExercicio.exercicio.youtube_url]
   );
   const primeiraMidiaUpload = aulaExercicio.exercicio.midias?.[0];

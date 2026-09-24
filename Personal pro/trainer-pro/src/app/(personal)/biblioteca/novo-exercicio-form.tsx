@@ -62,7 +62,7 @@ function ExercicioForm({
                 midiaTipo === t ? "border-primary bg-primary-soft text-primary-dark" : "border-border"
               )}
             >
-              {t === "youtube" ? "Colar link do YouTube" : "Fazer upload de arquivo(s)"}
+              {t === "youtube" ? "Colar link do vídeo" : "Fazer upload de arquivo(s)"}
             </button>
           ))}
         </div>
@@ -70,8 +70,12 @@ function ExercicioForm({
       </div>
 
       {midiaTipo === "youtube" ? (
-        <Field label="Link do YouTube">
-          <Input name="youtubeUrl" placeholder="https://youtube.com/watch?v=..." defaultValue={exercicio?.youtube_url ?? ""} />
+        <Field label="Link do vídeo (YouTube ou Google Drive)">
+          <Input
+            name="youtubeUrl"
+            placeholder="https://youtube.com/watch?v=... ou https://drive.google.com/file/d/..."
+            defaultValue={exercicio?.youtube_url ?? ""}
+          />
         </Field>
       ) : (
         <Field label="Arquivos (vídeo, gif ou imagem)" hint="Você pode selecionar vários de uma vez.">

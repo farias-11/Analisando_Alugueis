@@ -31,7 +31,7 @@ export async function criarExercicio(
     return { error: "Nome e grupo muscular são obrigatórios." };
   }
   if (midiaTipo === "youtube" && !youtubeUrl) {
-    return { error: "Cole o link do YouTube ou troque para upload de arquivo." };
+    return { error: "Cole o link do vídeo (YouTube ou Drive) ou troque para upload de arquivo." };
   }
 
   const { data: exercicio, error } = await supabase
@@ -95,7 +95,7 @@ export async function atualizarExercicio(
     return { error: "Nome e grupo muscular são obrigatórios." };
   }
   if (midiaTipo === "youtube" && !youtubeUrl) {
-    return { error: "Cole o link do YouTube ou troque para upload de arquivo." };
+    return { error: "Cole o link do vídeo (YouTube ou Drive) ou troque para upload de arquivo." };
   }
 
   const { data: exercicio, error } = await supabase
