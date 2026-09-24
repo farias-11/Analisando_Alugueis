@@ -173,7 +173,7 @@ export default async function TreinoDoDiaPage() {
                     concluidaNaSemana
                       ? "border-l-success"
                       : destaque
-                        ? "border-l-primary bg-primary-soft"
+                        ? "border-l-primary"
                         : "border-l-transparent"
                   )}
                 >
