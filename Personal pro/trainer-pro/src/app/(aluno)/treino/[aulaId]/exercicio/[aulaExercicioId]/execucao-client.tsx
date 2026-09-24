@@ -257,15 +257,23 @@ export function ExecucaoClient({
     }
   }
 
-  const embedUrl = useMemo(
-    () => videoEmbedUrl(aulaExercicio.exercicio.youtube_url),
-    [aulaExercicio.exercicio.youtube_url]
-  );
-  const plataformaVideo = useMemo(
-    () => videoPlataforma(aulaExercicio.exercicio.youtube_url),
-    [aulaExercicio.exercicio.youtube_url]
-  );
-  const primeiraMidiaUpload = aulaExercicio.exercicio.midias?.[0];
+  // Bi-set combina DOIS exercícios diferentes — sem isso, a área de vídeo
+  // sempre mostrava o do exercício principal, nunca o do parceiro (o aluno
+  // não tinha como ver a execução certa do segundo exercício do bi-set).
+  // Reseta pro principal ao mudar de exercício ajustando o state DURANTE o
+  // render (padrão recomendado pelo React pra isso) em vez de um useEffect
+  // com setState síncrono, que dispara um re-render em cascata à toa.
+  const [ultimoAulaExercicioId, setUltimoAulaExercicioId] = useState(aulaExercicio.id);
+  const [verVideoDoParceiro, setVerVideoDoParceiro] = useState(false);
+  if (aulaExercicio.id !== ultimoAulaExercicioId) {
+    setUltimoAulaExercicioId(aulaExercicio.id);
+    setVerVideoDoParceiro(false);
+  }
+  const exercicioDoVideo = verVideoDoParceiro && parceiro ? parceiro.exercicio : aulaExercicio.exercicio;
+
+  const embedUrl = useMemo(() => videoEmbedUrl(exercicioDoVideo.youtube_url), [exercicioDoVideo.youtube_url]);
+  const plataformaVideo = useMemo(() => videoPlataforma(exercicioDoVideo.youtube_url), [exercicioDoVideo.youtube_url]);
+  const primeiraMidiaUpload = exercicioDoVideo.midias?.[0];
 
   function salvarSerie() {
     const cargaNum = parseDecimalBR(carga);
@@ -432,11 +440,42 @@ export function ExecucaoClient({
         />
       )}
 
+      {/* Bi-set: alterna qual dos dois exercícios o vídeo mostra — sem isso,
+          o parceiro nunca tinha vídeo próprio visível. */}
+      {parceiro && (
+        <div className="flex shrink-0 gap-1.5">
+          <button
+            type="button"
+            onClick={() => setVerVideoDoParceiro(false)}
+            className={cn(
+              "flex-1 truncate rounded-lg border px-2 py-1 text-xs font-medium",
+              !verVideoDoParceiro ? "border-primary bg-primary-soft text-primary-dark" : "border-border text-muted"
+            )}
+          >
+            {aulaExercicio.exercicio.nome}
+          </button>
+          <button
+            type="button"
+            onClick={() => setVerVideoDoParceiro(true)}
+            className={cn(
+              "flex-1 truncate rounded-lg border px-2 py-1 text-xs font-medium",
+              verVideoDoParceiro ? "border-primary bg-primary-soft text-primary-dark" : "border-border text-muted"
+            )}
+          >
+            {parceiro.exercicio.nome}
+          </button>
+        </div>
+      )}
+
       {/* Altura fixa (não aspect-video puro) — junto com tabs, pills, inputs
           e botões, o vídeo em 16:9 largura-cheia não deixava a tela caber
           sem rolar (mesmo objetivo da Home, ver viewport-fit.tsx). O vídeo
           continua sempre visível e com controles completos, só não domina
-          mais a tela inteira. */}
+          mais a tela inteira. object-contain (não object-cover): vídeo
+          gravado no celular raramente é 16:9 puro, e "cover" cortava partes
+          importantes do movimento pra preencher o quadro — cover nunca
+          esconde conteúdo, só sobra tarja preta nas laterais/topo quando a
+          proporção não bate. */}
       <div className="relative aspect-video max-h-[var(--sf-media-h,220px)] w-full shrink-0 overflow-hidden rounded-card bg-black">
         {embedUrl ? (
           <iframe
@@ -447,7 +486,7 @@ export function ExecucaoClient({
           />
         ) : plataformaVideo === "drive" ? (
           <a
-            href={aulaExercicio.exercicio.youtube_url ?? "#"}
+            href={exercicioDoVideo.youtube_url ?? "#"}
             target="_blank"
             rel="noopener noreferrer"
             className="flex h-full w-full flex-col items-center justify-center gap-2 text-white"
@@ -459,14 +498,19 @@ export function ExecucaoClient({
           </a>
         ) : primeiraMidiaUpload ? (
           primeiraMidiaUpload.tipo === "video" ? (
-            <video src={primeiraMidiaUpload.url} controls className="h-full w-full object-cover" />
+            <video
+              key={primeiraMidiaUpload.url}
+              src={primeiraMidiaUpload.url}
+              controls
+              className="h-full w-full object-contain"
+            />
           ) : (
             <Image
               src={primeiraMidiaUpload.url}
-              alt={aulaExercicio.exercicio.nome}
+              alt={exercicioDoVideo.nome}
               fill
               sizes="(max-width: 768px) 100vw, 500px"
-              className="object-cover"
+              className="object-contain"
             />
           )
         ) : (
