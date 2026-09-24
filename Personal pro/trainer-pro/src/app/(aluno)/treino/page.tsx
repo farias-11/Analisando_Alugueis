@@ -22,12 +22,17 @@ const NOMES_DIAS_COMPLETO = [
 ];
 
 // "A - Peito, ombro e tríceps" -> { titulo: "Treino A", subtitulo: "Peito, ombro e tríceps" }
-// nomes que não seguem esse padrão (ex: personal usou outro estilo) caem no
-// fallback (nome inteiro como título) em vez de quebrar a tela.
+// "Treino 1 C - Costas e bíceps" -> { titulo: "Treino 1 C", subtitulo: "Costas e bíceps" } —
+// prefixo pode ter espaço (o personal as vezes já escreve "Treino X"), só não
+// duplica "Treino" quando ele já vem no prefixo. Nomes sem " - " nenhum (ex:
+// "Costas") caem no fallback (nome inteiro como título) em vez de quebrar a
+// tela.
 function partesDoNome(nome: string) {
-  const match = nome.match(/^([A-Za-zÀ-ÿ0-9]+)\s*-\s*(.+)$/);
+  const match = nome.match(/^(.+?)\s-\s(.+)$/);
   if (!match) return { titulo: nome, subtitulo: null as string | null };
-  return { titulo: `Treino ${match[1]}`, subtitulo: match[2] };
+  const prefixo = match[1].trim();
+  const titulo = /^treino\b/i.test(prefixo) ? prefixo : `Treino ${prefixo}`;
+  return { titulo, subtitulo: match[2].trim() };
 }
 
 export default async function TreinoDoDiaPage() {

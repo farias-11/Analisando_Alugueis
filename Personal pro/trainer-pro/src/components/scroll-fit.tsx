@@ -205,17 +205,6 @@ export function ScrollFit({
 
       setAltura(disponivel);
       setEscala(escalaAtual);
-
-      // Reconfirma um frame depois — cobre timing (fonte carregando,
-      // Safari com a barra em transição) sem arriscar uma chamada
-      // concorrente desfazer a correção no meio do caminho.
-      if (tentativas < 3) {
-        requestAnimationFrame(() => {
-          const aindaExcesso =
-            document.documentElement.scrollHeight - (window.visualViewport?.height ?? window.innerHeight);
-          if (aindaExcesso > 1) medir(tentativas + 1, escalaAtual);
-        });
-      }
     }
 
     // SÍNCRONO, dentro de useLayoutEffect — roda depois do DOM ser montado
@@ -228,37 +217,25 @@ export function ScrollFit({
     // que já não tem o tempo de carregamento de página pra "esconder" esse
     // frame. Rodar medir() já aqui, síncrono, faz o PRIMEIRO frame pintado
     // já sair do tamanho certo.
+    //
+    // DE PROPÓSITO não existe mais nenhuma remedida depois dessa (nem
+    // document.fonts.ready, nem setTimeout) — cada uma delas media de novo
+    // ASSÍNCRONO, ou seja, DEPOIS que o usuário já viu a primeira medida na
+    // tela, e se desse um valor diferente (ex: métrica da fonte web mudando
+    // um pixel entre o fallback e a fonte carregada) o layout MUDAVA DE
+    // TAMANHO NA FRENTE DO USUÁRIO — exatamente o bug que essas remedidas
+    // deveriam evitar, só que causado por elas mesmas (confirmado com log:
+    // 1ª medida ainda com fonte fallback, 2ª medida ~700ms depois quando
+    // document.fonts.ready resolvia, com escala visivelmente menor). A
+    // medida síncrona única já usa o layout real do DOM no momento do
+    // commit — não depende de nenhum recurso externo terminar de carregar.
     medir();
 
-    // A fonte customizada pode ainda não ter carregado no instante do medir()
-    // síncrono acima (raro fora do primeiro carregamento frio da página) —
-    // reconfere assim que ela terminar de carregar. Em navegação client-side
-    // (fonte já carregada há muito) isso não muda nada visível; só serve de
-    // rede de segurança pro carregamento inicial.
-    let cancelado = false;
-    if (typeof document !== "undefined" && document.fonts?.ready) {
-      document.fonts.ready.then(() => {
-        if (!cancelado) medir();
-      });
-    }
-
-    // Reconfirma um pouco depois do mount — vídeo/iframe (YouTube, mídia
-    // enviada) carrega de forma assíncrona e pode crescer DEPOIS da
-    // primeira medição, sem disparar resize nenhum.
-    const t1 = setTimeout(() => medir(), 350);
-    const t2 = setTimeout(() => medir(), 1200);
-
-    // O teclado do celular abrindo/fechando TAMBÉM dispara resize do
-    // visualViewport — medir() já ignora isso sozinho (via focadoRef, ver
-    // acima), então esse listener não precisa de nenhuma lógica extra aqui.
     const onResize = () => medir();
     window.addEventListener("resize", onResize);
     window.visualViewport?.addEventListener("resize", onResize);
     window.addEventListener("orientationchange", onResize);
     return () => {
-      cancelado = true;
-      clearTimeout(t1);
-      clearTimeout(t2);
       window.removeEventListener("resize", onResize);
       window.visualViewport?.removeEventListener("resize", onResize);
       window.removeEventListener("orientationchange", onResize);
