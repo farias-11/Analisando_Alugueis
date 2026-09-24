@@ -8,9 +8,9 @@ import { registrarSerie, registrarTodasAsSeries } from "@/app/actions/execucoes"
 import { enfileirarExecucao, obterFila } from "@/lib/offline-queue";
 import { Button } from "@/components/ui/button";
 import { ScrollFit } from "@/components/scroll-fit";
-import { videoEmbedUrl } from "@/lib/video";
+import { videoEmbedUrl, videoPlataforma } from "@/lib/video";
 import { cn, parseDecimalBR } from "@/lib/utils";
-import { CheckCircle2, ChevronRight, Flame, HeartCrack, Link2, WifiOff, X } from "lucide-react";
+import { CheckCircle2, ChevronRight, ExternalLink, Flame, HeartCrack, Link2, PlayCircle, WifiOff, X } from "lucide-react";
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
 type Registro = AulaExercicio & { exercicio: Exercicio & { midias: ExercicioMidia[] }; aula: Aula };
@@ -261,6 +261,10 @@ export function ExecucaoClient({
     () => videoEmbedUrl(aulaExercicio.exercicio.youtube_url),
     [aulaExercicio.exercicio.youtube_url]
   );
+  const plataformaVideo = useMemo(
+    () => videoPlataforma(aulaExercicio.exercicio.youtube_url),
+    [aulaExercicio.exercicio.youtube_url]
+  );
   const primeiraMidiaUpload = aulaExercicio.exercicio.midias?.[0];
 
   function salvarSerie() {
@@ -441,6 +445,18 @@ export function ExecucaoClient({
             allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
             allowFullScreen
           />
+        ) : plataformaVideo === "drive" ? (
+          <a
+            href={aulaExercicio.exercicio.youtube_url ?? "#"}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex h-full w-full flex-col items-center justify-center gap-2 text-white"
+          >
+            <PlayCircle size={40} className="fill-white/15" />
+            <span className="flex items-center gap-1 text-sm font-medium">
+              Assistir vídeo <ExternalLink size={14} />
+            </span>
+          </a>
         ) : primeiraMidiaUpload ? (
           primeiraMidiaUpload.tipo === "video" ? (
             <video src={primeiraMidiaUpload.url} controls className="h-full w-full object-cover" />
