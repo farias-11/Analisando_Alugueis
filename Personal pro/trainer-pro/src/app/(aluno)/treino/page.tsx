@@ -104,13 +104,9 @@ export default async function TreinoDoDiaPage() {
   return (
     <div>
       <TopBar title="Treino" />
-      <ScrollFit
-        rolar={false}
-        topo
-        className="flex flex-col space-y-[var(--sf-gap)] p-[calc(var(--sf-pad)*0.75)] [&>*]:shrink-0"
-      >
+      <ScrollFit className="flex flex-col space-y-4 p-4">
         <div>
-          <p className="text-[length:var(--sf-label,0.75rem)] text-muted">Ciclo atual</p>
+          <p className="text-xs text-muted">Ciclo atual</p>
           <p className="text-base font-bold text-foreground">
             {ciclo.nome} · {ciclo.duracao_semanas} semanas
           </p>
@@ -118,12 +114,10 @@ export default async function TreinoDoDiaPage() {
 
         {aulaHoje ? (
           <Link href={`/treino/${aulaHoje.id}`}>
-            <Card className="relative flex flex-col overflow-hidden bg-primary p-[calc(var(--sf-pad)*0.9)] text-white">
+            <Card className="relative flex flex-col overflow-hidden bg-primary p-5 text-white">
               <Dumbbell size={26} strokeWidth={1.75} className="absolute right-5 top-5 text-white/35" />
-              <p className="text-[length:var(--sf-label,0.75rem)] font-semibold uppercase tracking-wide text-white/80">
-                Próximo treino
-              </p>
-              <p className="mt-1.5 max-w-[80%] text-[length:calc(var(--sf-title,1.5rem)*0.9)] font-extrabold leading-tight">
+              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Próximo treino</p>
+              <p className="mt-1.5 max-w-[80%] text-2xl font-extrabold leading-tight">
                 {partesDoNome(aulaHoje.nome).subtitulo ?? aulaHoje.nome}
               </p>
               <p className="mt-1 text-sm text-white/80">
@@ -136,20 +130,16 @@ export default async function TreinoDoDiaPage() {
             </Card>
           </Link>
         ) : (
-          <Card className="relative flex flex-col bg-primary p-[calc(var(--sf-pad)*0.9)] text-white">
+          <Card className="relative flex flex-col bg-primary p-5 text-white">
             <Dumbbell size={26} strokeWidth={1.75} className="absolute right-5 top-5 text-white/35" />
-            <p className="text-[length:var(--sf-label,0.75rem)] font-semibold uppercase tracking-wide text-white/80">
-              Próximo treino
-            </p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Próximo treino</p>
             <p className="mt-3 flex items-center gap-1.5 text-base font-semibold">
               <Moon size={16} /> Hoje é dia de descanso.
             </p>
           </Card>
         )}
 
-        <p className="text-[length:var(--sf-label,0.75rem)] font-semibold uppercase tracking-wide text-muted">
-          Esta semana
-        </p>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted">Esta semana</p>
 
         <div className="space-y-4">
           {aulasComStatus.map(({ aula, totalExercicios, concluidaNaSemana }) => {
