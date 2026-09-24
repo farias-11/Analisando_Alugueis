@@ -23,10 +23,15 @@ export function EvolutionSummary({ resumo }: { resumo: ResumoEvolucao }) {
         </p>
       </div>
       <div className={`rounded-xl p-3 ${carga.bg}`}>
-        <p className="text-[11px] font-medium text-muted">Carga média</p>
+        <p className="text-[11px] font-medium text-muted">Maior evolução</p>
         <p className={`mt-1 flex items-center gap-1 text-sm font-semibold ${carga.text}`}>
           {resumo.cargaDeltaPct === null ? "—" : `${resumo.cargaDeltaPct > 0 ? "+" : ""}${resumo.cargaDeltaPct.toFixed(0)}%`}
         </p>
+        {resumo.cargaExercicioNome && (
+          <p className="mt-0.5 truncate text-[10px] text-muted" title={resumo.cargaExercicioNome}>
+            {resumo.cargaExercicioNome}
+          </p>
+        )}
       </div>
       <div className={`rounded-xl p-3 ${aderencia.bg}`}>
         <p className="text-[11px] font-medium text-muted">Aderência</p>

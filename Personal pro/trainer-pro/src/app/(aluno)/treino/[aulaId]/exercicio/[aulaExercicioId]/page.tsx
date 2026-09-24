@@ -61,14 +61,14 @@ export default async function ExecucaoExercicioPage({
     ultimaMarcaContinuacao,
     execucoesDeHojeContinuacao,
   ] = await Promise.all([
-    getUltimaMarca(aluno.id, aulaExercicioId),
+    getUltimaMarca(aluno.id, registro.exercicio_id),
     getExecucoesDeHoje(aluno.id, aulaExercicioId),
     getInicioTreinoHoje(aluno.id, ordem),
     parceiroId ? (getAulaExercicio(parceiroId) as Promise<RegistroCompleto | null>) : Promise.resolve(null),
-    parceiroId ? getUltimaMarca(aluno.id, parceiroId) : Promise.resolve(null),
+    parceiroId ? getUltimaMarca(aluno.id, proximo!.exercicio_id) : Promise.resolve(null),
     parceiroId ? getExecucoesDeHoje(aluno.id, parceiroId) : Promise.resolve({}),
     continuacaoId ? (getAulaExercicio(continuacaoId) as Promise<RegistroCompleto | null>) : Promise.resolve(null),
-    continuacaoId ? getUltimaMarca(aluno.id, continuacaoId) : Promise.resolve(null),
+    continuacaoId ? getUltimaMarca(aluno.id, proximo!.exercicio_id) : Promise.resolve(null),
     continuacaoId ? getExecucoesDeHoje(aluno.id, continuacaoId) : Promise.resolve({}),
   ]);
 

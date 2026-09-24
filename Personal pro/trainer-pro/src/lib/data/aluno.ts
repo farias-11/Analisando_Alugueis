@@ -213,20 +213,27 @@ export async function getAulaExercicio(id: string) {
   return data;
 }
 
-/** Melhor série já registrada nesse exercício (maior carga, com a repetição
+/** Melhor série já registrada nesse EXERCÍCIO (maior carga, com a repetição
  * daquela MESMA série) — pra exibir como referência. Carga e repetição
  * precisam vir da mesma linha: pegar cada máximo de series diferentes
- * inventaria uma combinação que o aluno nunca fez. */
+ * inventaria uma combinação que o aluno nunca fez.
+ *
+ * Vinculado ao exercício em si (`exercicio_id`), não ao `aula_exercicio_id`
+ * (a linha específica dentro de UM ciclo/treino) — antes, quando o personal
+ * trocava de ciclo e recriava o mesmo exercício numa aula nova, o máximo
+ * "zerava" porque virava um aula_exercicio_id diferente, mesmo sendo o
+ * mesmíssimo exercício. Isso vale tanto pra série de aquecimento quanto pra
+ * série que vale — ambas apontam pro mesmo `exercicio_id`. */
 export async function getUltimaMarca(
   alunoId: string,
-  aulaExercicioId: string
+  exercicioId: string
 ): Promise<{ carga: number | null; repeticoes: number | null } | null> {
   const supabase = await createClient();
   const { data } = await supabase
     .from("execucoes")
-    .select("carga, repeticoes")
+    .select("carga, repeticoes, aula_exercicios!inner(exercicio_id)")
     .eq("aluno_id", alunoId)
-    .eq("aula_exercicio_id", aulaExercicioId);
+    .eq("aula_exercicios.exercicio_id", exercicioId);
 
   if (!data || data.length === 0) return null;
 

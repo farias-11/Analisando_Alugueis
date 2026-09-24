@@ -5,8 +5,15 @@ import { diasDesde, type Tendencia } from "@/lib/status";
 export interface ResumoEvolucao {
   pesoDeltaKg: number | null;
   pesoTendencia: Tendencia;
+  /** Maior evolução de carga ENTRE OS EXERCÍCIOS do ciclo atual (primeira
+   * carga registrada nesse exercício desde que o ciclo começou vs. a mais
+   * recente) — não mais uma média cega de TODAS as cargas de todos os
+   * exercícios misturadas. Ver comentário grande em getResumoEvolucao. */
   cargaDeltaPct: number | null;
   cargaTendencia: Tendencia;
+  /** Nome do exercício dono do cargaDeltaPct acima — null se cargaDeltaPct
+   * também for null (nenhum exercício com 2+ registros de carga no ciclo). */
+  cargaExercicioNome: string | null;
   aderenciaPct: number;
   aderenciaTendencia: Tendencia;
   /** Dias desde a última execução registrada, de QUALQUER ciclo/aula — null
@@ -18,46 +25,82 @@ export interface ResumoEvolucao {
   diasDesdeUltimoTreino: number | null;
 }
 
+/** Maior evolução de carga ENTRE OS EXERCÍCIOS de um ciclo — primeira carga
+ * registrada em cada exercício desde que o ciclo começou vs. a mais recente
+ * — e retorna a de MAIOR alta. Substitui a versão anterior (média de TODAS
+ * as cargas de TODOS os exercícios num período fixo de 30 dias vs. 30-60
+ * dias atrás): misturar carga de exercícios bem diferentes (ex: supino a
+ * 40kg com rosca a 8kg) numa média só nunca fez muito sentido, e pior — pra
+ * quem começou a treinar (ou renovou o ciclo) há menos de 60 dias, a janela
+ * "30-60 dias atrás" simplesmente não tinha NENHUM registro, e o indicador
+ * ficava pra sempre em "—" mesmo com vários treinos já feitos. */
+async function getMelhorEvolucaoCiclo(
+  alunoId: string,
+  dataInicioCiclo: string
+): Promise<{ exercicioNome: string; deltaPct: number } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("execucoes")
+    .select("carga, data, aula_exercicios(exercicio_id, exercicios(nome))")
+    .eq("aluno_id", alunoId)
+    .gte("data", dataInicioCiclo)
+    .not("carga", "is", null)
+    .order("data", { ascending: true });
+
+  if (!data || data.length === 0) return null;
+
+  type Linha = {
+    carga: number;
+    aula_exercicios: { exercicio_id: string; exercicios: { nome: string } | null } | null;
+  };
+  const porExercicio = new Map<string, { nome: string; primeira: number; ultima: number }>();
+  for (const row of data as unknown as Linha[]) {
+    const exercicioId = row.aula_exercicios?.exercicio_id;
+    const nome = row.aula_exercicios?.exercicios?.nome;
+    if (!exercicioId || !nome) continue;
+    const atual = porExercicio.get(exercicioId);
+    // já vem ordenado por data ascendente — a primeira vez que aparece é a
+    // carga mais antiga, e toda atualização de "ultima" depois é sempre mais
+    // recente que a anterior
+    if (!atual) porExercicio.set(exercicioId, { nome, primeira: row.carga, ultima: row.carga });
+    else atual.ultima = row.carga;
+  }
+
+  let melhor: { exercicioNome: string; deltaPct: number } | null = null;
+  for (const { nome, primeira, ultima } of porExercicio.values()) {
+    if (primeira <= 0 || primeira === ultima) continue;
+    const deltaPct = ((ultima - primeira) / primeira) * 100;
+    if (!melhor || deltaPct > melhor.deltaPct) melhor = { exercicioNome: nome, deltaPct };
+  }
+  return melhor;
+}
+
 /** Resumo de evolução (topo da Ficha do aluno / Meu progresso): só 2-3 indicadores
  * com seta e cor, o detalhe fino fica atrás de "Ver tudo" nas telas de gráfico. */
 export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao> {
   const supabase = await createClient();
   const trintaDiasAtras = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
-  const sessentaDiasAtras = new Date(Date.now() - 60 * 86_400_000).toISOString().slice(0, 10);
 
-  // as três consultas abaixo (peso, carga atual, carga anterior) e a busca do
-  // ciclo ativo não dependem umas das outras — rodam em paralelo
-  const [{ data: medidas }, { data: execAtual }, { data: execAnterior }, { data: ciclo }, { data: ultimaExecucao }] =
-    await Promise.all([
-      supabase
-        .from("medidas")
-        .select("peso, data")
-        .eq("aluno_id", alunoId)
-        .gte("data", trintaDiasAtras)
-        .not("peso", "is", null)
-        .order("data", { ascending: true }),
-      supabase
-        .from("execucoes")
-        .select("carga")
-        .eq("aluno_id", alunoId)
-        .gte("data", trintaDiasAtras)
-        .not("carga", "is", null),
-      supabase
-        .from("execucoes")
-        .select("carga")
-        .eq("aluno_id", alunoId)
-        .gte("data", sessentaDiasAtras)
-        .lt("data", trintaDiasAtras)
-        .not("carga", "is", null),
-      supabase.from("ciclos").select("id").eq("aluno_id", alunoId).eq("ativo", true).maybeSingle(),
-      supabase
-        .from("execucoes")
-        .select("data")
-        .eq("aluno_id", alunoId)
-        .order("data", { ascending: false })
-        .limit(1)
-        .maybeSingle(),
-    ]);
+  // as consultas abaixo (peso, ciclo ativo, última execução) não dependem
+  // umas das outras — rodam em paralelo. A evolução de carga (função acima)
+  // só roda DEPOIS, porque precisa de ciclo.data_inicio.
+  const [{ data: medidas }, { data: ciclo }, { data: ultimaExecucao }] = await Promise.all([
+    supabase
+      .from("medidas")
+      .select("peso, data")
+      .eq("aluno_id", alunoId)
+      .gte("data", trintaDiasAtras)
+      .not("peso", "is", null)
+      .order("data", { ascending: true }),
+    supabase.from("ciclos").select("id, data_inicio").eq("aluno_id", alunoId).eq("ativo", true).maybeSingle(),
+    supabase
+      .from("execucoes")
+      .select("data")
+      .eq("aluno_id", alunoId)
+      .order("data", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
 
   const diasDesdeUltimoTreino = ultimaExecucao ? diasDesde(ultimaExecucao.data) : null;
 
@@ -68,16 +111,9 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
   const pesoTendencia: Tendencia =
     pesoDeltaKg === null ? "neutra" : pesoDeltaKg < -0.2 ? "positiva" : pesoDeltaKg > 0.2 ? "negativa" : "neutra";
 
-  const media = (rows: { carga: number | null }[] | null) =>
-    rows && rows.length ? rows.reduce((s, r) => s + Number(r.carga), 0) / rows.length : null;
-
-  const mediaAtual = media(execAtual);
-  const mediaAnterior = media(execAnterior);
-
-  let cargaDeltaPct: number | null = null;
-  if (mediaAtual !== null && mediaAnterior !== null && mediaAnterior > 0) {
-    cargaDeltaPct = ((mediaAtual - mediaAnterior) / mediaAnterior) * 100;
-  }
+  const melhorEvolucao = ciclo ? await getMelhorEvolucaoCiclo(alunoId, ciclo.data_inicio) : null;
+  const cargaDeltaPct = melhorEvolucao?.deltaPct ?? null;
+  const cargaExercicioNome = melhorEvolucao?.exercicioNome ?? null;
   const cargaTendencia: Tendencia =
     cargaDeltaPct === null ? "neutra" : cargaDeltaPct > 2 ? "positiva" : cargaDeltaPct < -2 ? "negativa" : "neutra";
 
@@ -131,6 +167,7 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
     pesoTendencia,
     cargaDeltaPct,
     cargaTendencia,
+    cargaExercicioNome,
     aderenciaPct,
     aderenciaTendencia,
     diasDesdeUltimoTreino,

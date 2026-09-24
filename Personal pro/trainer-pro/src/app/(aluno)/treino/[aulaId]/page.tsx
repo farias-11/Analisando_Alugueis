@@ -7,7 +7,7 @@ import { TopBar } from "@/components/nav/top-bar";
 import { TreinoTimer } from "@/components/treino-timer";
 import { ScrollFit } from "@/components/scroll-fit";
 import { Card } from "@/components/ui/card";
-import { CheckCircle2, ChevronRight, Flame, PlayCircle } from "lucide-react";
+import { CheckCircle2, ChevronRight, Flame, Link2, PlayCircle } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
@@ -46,27 +46,46 @@ export default async function AulaPage({
     if (!inicioIso || e.data < inicioIso) inicioIso = e.data;
   }
 
-  // aquecimento + continuação do mesmo exercício são duas linhas no banco
-  // (pra ter contagem de série diferente), mas formam UM fluxo só na
-  // execução — aqui juntamos as duas numa única linha da lista, senão o
-  // exercício aparece duplicado ("Supino... aquecimento" e "Supino..." de
-  // novo logo em seguida)
-  const itensBrutos: { principal: (typeof exerciciosBrutos)[number]; continuacao?: (typeof exerciciosBrutos)[number] }[] = [];
+  // Duas formas de um exercício "absorver" o próximo na lista (mesma regra
+  // da tela de execução, ver anteriorEhAquecimentoDoMesmo/combina_proximo em
+  // exercicio/[aulaExercicioId]/page.tsx):
+  // 1) Aquecimento + continuação do mesmo exercício são duas linhas no banco
+  //    (pra ter contagem de série diferente), mas formam UM fluxo só —
+  //    juntadas numa única linha da lista, senão o exercício aparece
+  //    duplicado ("Supino... aquecimento" e "Supino..." de novo em seguida).
+  // 2) Bi-set (combina_proximo) — dois exercícios DIFERENTES feitos juntos,
+  //    sem descanso entre eles; antes apareciam como duas linhas soltas na
+  //    lista (parecendo dois exercícios separados) quando são um só passo
+  //    do treino.
+  const itensBrutos: {
+    principal: (typeof exerciciosBrutos)[number];
+    continuacao?: (typeof exerciciosBrutos)[number];
+    parceiro?: (typeof exerciciosBrutos)[number];
+  }[] = [];
   for (let i = 0; i < exerciciosBrutos.length; i++) {
     const atual = exerciciosBrutos[i];
     const anterior = exerciciosBrutos[i - 1];
-    if (anterior?.eh_aquecimento && anterior.exercicio_id === atual.exercicio_id) continue;
+    const anteriorEhAquecimentoDoMesmo = anterior?.eh_aquecimento && anterior.exercicio_id === atual.exercicio_id;
+    if (anterior?.combina_proximo || anteriorEhAquecimentoDoMesmo) continue;
     const proximo = exerciciosBrutos[i + 1];
     const temContinuacao = atual.eh_aquecimento && proximo && proximo.exercicio_id === atual.exercicio_id;
-    itensBrutos.push({ principal: atual, continuacao: temContinuacao ? proximo : undefined });
+    const temParceiro = atual.combina_proximo && !!proximo;
+    itensBrutos.push({
+      principal: atual,
+      continuacao: temContinuacao ? proximo : undefined,
+      parceiro: temParceiro ? proximo : undefined,
+    });
   }
 
   const itens = itensBrutos.map((item) => {
     const feitoPrincipal = (contagemPorExercicio.get(item.principal.id) ?? 0) >= item.principal.series;
     const feitoContinuacao =
       !item.continuacao || (contagemPorExercicio.get(item.continuacao.id) ?? 0) >= item.continuacao.series;
+    const feitoParceiro = !item.parceiro || (contagemPorExercicio.get(item.parceiro.id) ?? 0) >= item.parceiro.series;
     const concluido =
-      item.principal.tipo === "cardio" ? (contagemPorExercicio.get(item.principal.id) ?? 0) > 0 : feitoPrincipal && feitoContinuacao;
+      item.principal.tipo === "cardio"
+        ? (contagemPorExercicio.get(item.principal.id) ?? 0) > 0
+        : feitoPrincipal && feitoContinuacao && feitoParceiro;
     return { ...item, concluido };
   });
   const indiceAtual = itens.findIndex((i) => !i.concluido);
@@ -89,7 +108,7 @@ export default async function AulaPage({
       </div>
       <ScrollFit className="p-4">
         <div className="space-y-3">
-          {itens.map(({ principal: ex, continuacao, concluido }, i) => (
+          {itens.map(({ principal: ex, continuacao, parceiro, concluido }, i) => (
             <Link key={ex.id} href={`/treino/${aulaId}/exercicio/${ex.id}`}>
               <Card className={cn("flex items-center gap-3", i === indiceAtual && "border-primary bg-primary-soft")}>
                 <div
@@ -102,7 +121,12 @@ export default async function AulaPage({
                 </div>
                 <div className="flex-1">
                   <p className="flex flex-wrap items-center gap-1.5 text-sm font-semibold">
-                    {ex.exercicio.nome}
+                    {parceiro ? `${ex.exercicio.nome} + ${parceiro.exercicio.nome}` : ex.exercicio.nome}
+                    {parceiro && (
+                      <span className="flex items-center gap-0.5 rounded-pill bg-primary-soft px-1.5 py-0.5 text-[10px] font-medium text-primary-dark">
+                        <Link2 size={10} /> Bi-set
+                      </span>
+                    )}
                     {ex.eh_aquecimento && (
                       <span className="flex items-center gap-0.5 rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
                         <Flame size={10} /> Aquecimento

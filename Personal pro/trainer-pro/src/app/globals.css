@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-/* Paleta Duo Flow — hex oficiais da marca (não derivados da imagem da prancha). */
+/* Paleta Duo Flow — hex oficiais da marca. Azul Safira (#0F52BA) desde a
+   troca de identidade visual; dark/light/soft derivados dele mantendo a
+   mesma relação de luminosidade/saturação que a paleta laranja anterior. */
 :root {
   --background: #f7f7f7;
   --surface: #ffffff;
@@ -9,10 +11,10 @@
   --muted-2: #a3a3a3;
   --border: #eeeeee;
 
-  --primary: #f2732a;
-  --primary-dark: #d95a16;
-  --primary-light: #ff8a3d;
-  --primary-soft: #fdeadf;
+  --primary: #0f52ba;
+  --primary-dark: #10418e;
+  --primary-light: #1264e2;
+  --primary-soft: #e7eef8;
 
   --success: #22c55e;
   --success-soft: #e8f9ee;

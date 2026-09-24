@@ -1,12 +1,18 @@
 import { requireAluno } from "@/lib/data/current-user";
-import { getAderenciaSemana, getAulasDoCiclo, getCicloAtivo, aulaDoDia } from "@/lib/data/aluno";
+import {
+  getAderenciaSemana,
+  getAulasDoCiclo,
+  getCicloAtivo,
+  aulaDoDia,
+  getStatusExerciciosAulaHoje,
+} from "@/lib/data/aluno";
 import { getResumoEvolucao, type ResumoEvolucao } from "@/lib/data/evolucao";
 import { getGraficoPeso } from "@/lib/data/graficos";
 import { saudacaoPorHorario, type Tendencia } from "@/lib/status";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { ViewportFit } from "./viewport-fit";
-import { Check, CheckCircle2, Dumbbell, Minus, Play, TrendingDown, TrendingUp } from "lucide-react";
+import { Check, CheckCircle2, Clock, Dumbbell, Minus, Play, TrendingDown, TrendingUp } from "lucide-react";
 
 // legenda abaixo dos círculos da meta semanal — regra simples baseada no
 // progresso real da semana, sem IA (handoff da Home do aluno, seção 2.3)
@@ -143,7 +149,16 @@ export default async function HomePage() {
     aulaDoDia(aluno.id, aulas),
     getAderenciaSemana(aluno.id, aulas),
   ]);
-  const jaFezHoje = aulaHoje ? aulasFeitasHojeIds.has(aulaHoje.id) : false;
+  // aulasFeitasHojeIds só diz "teve PELO MENOS uma série registrada hoje
+  // nessa aula" — não "terminou tudo". Usar isso sozinho pra decidir
+  // "concluído! 🎉" era o bug: abrir uma notificação no meio do treino (só
+  // 1-2 exercícios feitos) e voltar pra Home já mostrava a aula inteira como
+  // finalizada. jaFezHoje agora exige TODOS os exercícios feitos hoje
+  // (mesma checagem usada na rotação do próximo treino); emAndamento cobre o
+  // caso do meio, "comecei mas ainda não terminei".
+  const algumFeitoHoje = aulaHoje ? aulasFeitasHojeIds.has(aulaHoje.id) : false;
+  const jaFezHoje = aulaHoje && algumFeitoHoje ? (await getStatusExerciciosAulaHoje(aluno.id, aulaHoje.id)).todosConcluidos : false;
+  const emAndamento = algumFeitoHoje && !jaFezHoje;
 
   const primeiroNome = aluno.nome.split(" ")[0];
   const saudacao = saudacaoPorHorario();
@@ -192,6 +207,21 @@ export default async function HomePage() {
               className="mt-3 w-full bg-white text-success hover:bg-white/90"
             >
               Rever treino
+            </ButtonLink>
+          </>
+        ) : aulaHoje && emAndamento ? (
+          <>
+            <p className="flex items-center gap-1.5 text-[var(--fs-tiny)] font-semibold uppercase tracking-wide text-white/80">
+              <Clock size={14} /> Em andamento
+            </p>
+            <p className="mt-1 max-w-[85%] text-[var(--fs-hero)] font-bold leading-tight">{aulaHoje.nome}</p>
+            <ButtonLink
+              href={`/treino/${aulaHoje.id}`}
+              size="sm"
+              variant="secondary"
+              className="mt-3 w-full bg-white text-primary-dark hover:bg-white/90"
+            >
+              <Play size={14} className="fill-current" /> Continuar treino
             </ButtonLink>
           </>
         ) : aulaHoje ? (

@@ -1,11 +1,10 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import { criarTicket } from "@/app/actions/tickets";
-import { Button } from "@/components/ui/button";
+import { Button, ButtonLink } from "@/components/ui/button";
 import { Field, Textarea } from "@/components/ui/form";
-import { AlertTriangle, Camera } from "lucide-react";
+import { Camera, CheckCircle2 } from "lucide-react";
 
 export function RelatarDorForm({
   aulaExercicioId,
@@ -17,16 +16,24 @@ export function RelatarDorForm({
   aulaNome: string;
 }) {
   const [state, formAction, pending] = useActionState(criarTicket, undefined);
-  const router = useRouter();
-  const enviouRef = useRef(false);
 
-  useEffect(() => {
-    if (state?.whatsappUrl && !enviouRef.current) {
-      enviouRef.current = true;
-      window.location.href = state.whatsappUrl;
-      setTimeout(() => router.push("/treino"), 300);
-    }
-  }, [state?.whatsappUrl, router]);
+  // Fica dentro do app: nada de WhatsApp nem de tirar o aluno do treino no
+  // meio — o relato já cai na fila de atividades do personal (dentro do
+  // app, ver criarTicket) e ele recebe aviso por lá.
+  if (state?.ok) {
+    return (
+      <div className="flex flex-col items-center gap-3 rounded-2xl bg-success-soft p-6 text-center">
+        <CheckCircle2 size={32} className="text-success" />
+        <div>
+          <p className="font-semibold text-success">Relato enviado!</p>
+          <p className="mt-1 text-sm text-muted">Seu personal foi avisado e vai te responder por aqui.</p>
+        </div>
+        <ButtonLink href="/treino" className="w-full">
+          Voltar ao treino
+        </ButtonLink>
+      </div>
+    );
+  }
 
   return (
     <form action={formAction} className="space-y-4">
@@ -54,14 +61,6 @@ export function RelatarDorForm({
           <input type="file" name="foto" accept="image/*" className="hidden" />
         </label>
       </Field>
-
-      <div className="flex items-start gap-2 rounded-xl border border-warning/30 bg-warning-soft p-3 text-xs text-warning">
-        <AlertTriangle size={16} className="mt-0.5 shrink-0" />
-        <p>
-          Ao enviar, abriremos o WhatsApp com essa mensagem (e a foto, se anexada) para você
-          mandar ao seu personal — a partir daí, esse conteúdo passa a trafegar fora do app.
-        </p>
-      </div>
 
       {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}
 

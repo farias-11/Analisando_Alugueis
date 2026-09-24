@@ -3,12 +3,11 @@
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireAluno, requirePersonal } from "@/lib/data/current-user";
-import { mensagemTicketDor, buildWhatsappLink } from "@/lib/whatsapp";
 import { notificarAluno, notificarPersonal } from "@/lib/notificar";
 import { revalidatePath } from "next/cache";
 import { sanitizeFileName } from "@/lib/utils";
 
-export type CriarTicketState = { error?: string; whatsappUrl?: string } | undefined;
+export type CriarTicketState = { error?: string; ok?: boolean } | undefined;
 
 export async function criarTicket(
   _prevState: CriarTicketState,
@@ -58,7 +57,9 @@ export async function criarTicket(
     return { error: "Não foi possível registrar o relato. Tente novamente." };
   }
 
-  // aviso interno para o personal (app + push)
+  // aviso interno pro personal (app + push) — fica na fila de atividades dele
+  // (aba "tickets" do aluno) até ele resolver. Antes disso também abria o
+  // WhatsApp e tirava o aluno do app no meio do treino; agora fica só nisso.
   await notificarPersonal(aluno.personal_id, {
     tipo: "ticket_novo",
     titulo: `Novo relato de dor — ${aluno.nome}`,
@@ -66,25 +67,8 @@ export async function criarTicket(
     link: `/alunos/${aluno.id}?aba=tickets`,
   });
 
-  const { data: personal } = await supabase
-    .from("personals")
-    .select("whatsapp_numero")
-    .eq("id", aluno.personal_id)
-    .maybeSingle();
-
-  const mensagem = mensagemTicketDor({
-    alunoNome: aluno.nome,
-    aulaNome,
-    exercicioNome,
-    descricao,
-  });
-
-  const whatsappUrl = personal
-    ? buildWhatsappLink(personal.whatsapp_numero, mensagem)
-    : undefined;
-
   revalidatePath("/tickets");
-  return { whatsappUrl };
+  return { ok: true };
 }
 
 export async function resolverTicket(formData: FormData) {
