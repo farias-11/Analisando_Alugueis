@@ -154,24 +154,29 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
   return aulasOrdenadas[(indiceAtual + 1) % aulasOrdenadas.length];
 }
 
-/** Status de cada exercício da aula hoje (aquecimento + continuação do mesmo
- * exercício contam como um item só; cardio conta como feito com qualquer
- * registro hoje) — mesma regra usada na lista de exercícios da aula, mas
- * compartilhada aqui pra também dar pra saber se o treino INTEIRO já terminou
- * de verdade (não só o último exercício que o aluno abriu). */
-export async function getStatusExerciciosAulaHoje(alunoId: string, aulaId: string) {
+/** Status de cada exercício de uma aula desde uma data (aquecimento +
+ * continuação do mesmo exercício contam como um item só; cardio conta como
+ * feito com qualquer registro no período) — parametrizado por "desde" pra
+ * dar pra checar tanto "terminou hoje" (getStatusExerciciosAulaHoje) quanto
+ * "terminou essa semana" (getAderenciaSemana) com a MESMA regra de "treino
+ * inteiro" (todo exercício com as séries batidas), sem duplicar a lógica de
+ * agrupamento aquecimento/bi-set/cardio nos dois lugares — bug real já visto
+ * aqui: a meta semanal contava a aula como concluída com só 1 série de 1
+ * exercício registrada, longe do treino inteiro. */
+export async function getStatusExerciciosAulaDesde(alunoId: string, aulaId: string, desde: Date) {
   const exercicios = await getExerciciosDaAula(aulaId);
-  if (exercicios.length === 0) return { itens: [] as { aulaExercicioId: string; concluido: boolean }[], todosConcluidos: false };
+  if (exercicios.length === 0) {
+    return { itens: [] as { aulaExercicioId: string; concluido: boolean }[], todosConcluidos: false, algumaExecucao: false };
+  }
 
   const supabase = await createClient();
   const ids = exercicios.map((e) => e.id);
-  const hojeInicio = inicioDoDiaBrasil();
   const { data: execs } = await supabase
     .from("execucoes")
     .select("aula_exercicio_id")
     .eq("aluno_id", alunoId)
     .in("aula_exercicio_id", ids)
-    .gte("data", hojeInicio.toISOString());
+    .gte("data", desde.toISOString());
 
   const contagem = new Map<string, number>();
   for (const e of execs ?? []) contagem.set(e.aula_exercicio_id, (contagem.get(e.aula_exercicio_id) ?? 0) + 1);
@@ -188,7 +193,15 @@ export async function getStatusExerciciosAulaHoje(alunoId: string, aulaId: strin
     const concluido = atual.tipo === "cardio" ? (contagem.get(atual.id) ?? 0) > 0 : feitoPrincipal && feitoContinuacao;
     itens.push({ aulaExercicioId: atual.id, concluido });
   }
-  return { itens, todosConcluidos: itens.length > 0 && itens.every((i) => i.concluido) };
+  return {
+    itens,
+    todosConcluidos: itens.length > 0 && itens.every((i) => i.concluido),
+    algumaExecucao: (execs ?? []).length > 0,
+  };
+}
+
+export async function getStatusExerciciosAulaHoje(alunoId: string, aulaId: string) {
+  return getStatusExerciciosAulaDesde(alunoId, aulaId, inicioDoDiaBrasil());
 }
 
 export async function getExerciciosDaAula(
@@ -352,12 +365,21 @@ export async function getAderenciaSemana(alunoId: string, aulas: Aula[]): Promis
 
   const linhas = (data ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[];
 
-  const aulasConcluidas = new Set(linhas.map((e) => e.aula_exercicios?.aula_id).filter(Boolean));
   const aulasFeitasHojeIds = new Set(
     linhas
       .filter((l) => l.aula_exercicios?.aula_id && new Date(l.data) >= hojeInicio)
       .map((l) => l.aula_exercicios!.aula_id)
   );
 
-  return { concluidas: aulasConcluidas.size, meta: aulas.length, aulasFeitasHojeIds };
+  // só checa de verdade (todo exercício com as séries batidas) as aulas que
+  // tiveram AO MENOS uma execução essa semana — evita rodar a checagem completa
+  // pras aulas que nem foram tocadas ainda.
+  const aulasTocadasIds = new Set(linhas.map((l) => l.aula_exercicios?.aula_id).filter(Boolean) as string[]);
+  const aulasTocadas = aulas.filter((a) => aulasTocadasIds.has(a.id));
+  const statusPorAula = await Promise.all(
+    aulasTocadas.map((a) => getStatusExerciciosAulaDesde(alunoId, a.id, inicioSemana))
+  );
+  const concluidas = statusPorAula.filter((s) => s.todosConcluidos).length;
+
+  return { concluidas, meta: aulas.length, aulasFeitasHojeIds };
 }

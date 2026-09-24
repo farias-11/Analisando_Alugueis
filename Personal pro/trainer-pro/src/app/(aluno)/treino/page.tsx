@@ -1,5 +1,11 @@
 import { requireAluno } from "@/lib/data/current-user";
-import { getAulasDoCiclo, getCicloAtivo, aulaDoDia, getExerciciosDaAula } from "@/lib/data/aluno";
+import {
+  getAulasDoCiclo,
+  getCicloAtivo,
+  aulaDoDia,
+  getExerciciosDaAula,
+  getStatusExerciciosAulaDesde,
+} from "@/lib/data/aluno";
 import { createClient } from "@/lib/supabase/server";
 import { inicioDaSemanaAtualBrasil } from "@/lib/status";
 import { TopBar } from "@/components/nav/top-bar";
@@ -7,7 +13,7 @@ import { ScrollFit } from "@/components/scroll-fit";
 import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { Dumbbell, Moon, Play } from "lucide-react";
+import { Clock, Dumbbell, Moon, Play } from "lucide-react";
 import Link from "next/link";
 
 const NOMES_DIAS_ABREV = ["dom", "seg", "ter", "qua", "qui", "sex", "sáb"];
@@ -63,15 +69,21 @@ export default async function TreinoDoDiaPage() {
   // semana" na segunda seguinte, mesmo a semana já tendo virado no domingo).
   const inicioSemana = inicioDaSemanaAtualBrasil();
 
-  // aulaDoDia (própria query interna) e os exercícios de cada aula não
-  // dependem um do outro — rodam em paralelo. Exercícios de todas as aulas
-  // numa query só (.in) em vez de uma query por aula.
+  // aulaDoDia (própria query interna), os exercícios de cada aula e o status
+  // de conclusão da semana não dependem um do outro — rodam em paralelo.
+  // Exercícios de todas as aulas numa query só (.in) em vez de uma por aula;
+  // o status de conclusão usa getStatusExerciciosAulaDesde (mesma função da
+  // Home/getAderenciaSemana) pra "concluída" significar o TREINO INTEIRO
+  // feito essa semana, não só ter tocado em algum exercício — bug real já
+  // visto aqui: um card aparecia "Concluído" com só 1 série de 1 exercício
+  // registrada.
   const aulaIds = aulas.map((a) => a.id);
-  const [aulaHoje, { data: exerciciosData }] = await Promise.all([
+  const [aulaHoje, { data: exerciciosData }, statusPorAula] = await Promise.all([
     aulaDoDia(aluno.id, aulas),
     aulaIds.length
       ? supabase.from("aula_exercicios").select("*, exercicio:exercicios(*)").in("aula_id", aulaIds).order("ordem", { ascending: true })
       : Promise.resolve({ data: [] as Awaited<ReturnType<typeof getExerciciosDaAula>> }),
+    Promise.all(aulas.map((a) => getStatusExerciciosAulaDesde(aluno.id, a.id, inicioSemana))),
   ]);
   const exerciciosPorAulaId = new Map<string, typeof exerciciosData>();
   for (const ex of exerciciosData ?? []) {
@@ -81,23 +93,15 @@ export default async function TreinoDoDiaPage() {
   }
   const exerciciosPorAula = aulas.map((aula) => exerciciosPorAulaId.get(aula.id) ?? []);
 
-  // uma única query pras execuções da semana de TODAS as aulas, em vez de uma
-  // query de contagem por aula (evita N idas ao banco em série/paralelo)
-  const todosAulaExercicioIds = exerciciosPorAula.flat().map((e) => e.id);
-  const { data: execucoesSemana } = todosAulaExercicioIds.length
-    ? await supabase
-        .from("execucoes")
-        .select("aula_exercicio_id")
-        .eq("aluno_id", aluno.id)
-        .in("aula_exercicio_id", todosAulaExercicioIds)
-        .gte("data", inicioSemana.toISOString())
-    : { data: [] as { aula_exercicio_id: string }[] };
-  const aulaExercicioIdsFeitosNaSemana = new Set((execucoesSemana ?? []).map((e) => e.aula_exercicio_id));
-
   const aulasComStatus = aulas.map((aula, i) => {
     const exercicios = exerciciosPorAula[i];
-    const concluidaNaSemana = exercicios.some((e) => aulaExercicioIdsFeitosNaSemana.has(e.id));
-    return { aula, totalExercicios: exercicios.length, concluidaNaSemana };
+    const { todosConcluidos, algumaExecucao } = statusPorAula[i];
+    return {
+      aula,
+      totalExercicios: exercicios.length,
+      concluidaNaSemana: todosConcluidos,
+      emAndamento: algumaExecucao && !todosConcluidos,
+    };
   });
   const totalExerciciosHoje = aulaHoje ? exerciciosPorAula[aulas.findIndex((a) => a.id === aulaHoje.id)].length : 0;
 
@@ -142,7 +146,7 @@ export default async function TreinoDoDiaPage() {
         <p className="text-xs font-semibold uppercase tracking-wide text-muted">Esta semana</p>
 
         <div className="space-y-4">
-          {aulasComStatus.map(({ aula, totalExercicios, concluidaNaSemana }) => {
+          {aulasComStatus.map(({ aula, totalExercicios, concluidaNaSemana, emAndamento }) => {
             const destaque = aulaHoje?.id === aula.id;
             const diaLabel =
               aula.dias_semana && aula.dias_semana.length > 0
@@ -162,7 +166,7 @@ export default async function TreinoDoDiaPage() {
                     "flex items-center justify-between gap-3 border-l-4 p-5",
                     concluidaNaSemana
                       ? "border-l-success"
-                      : destaque
+                      : emAndamento || destaque
                         ? "border-l-primary"
                         : "border-l-transparent"
                   )}
@@ -175,6 +179,10 @@ export default async function TreinoDoDiaPage() {
                   </div>
                   {concluidaNaSemana ? (
                     <span className="shrink-0 text-xs font-semibold text-success">Concluído</span>
+                  ) : emAndamento ? (
+                    <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-primary">
+                      <Clock size={12} /> Em andamento
+                    </span>
                   ) : destaque ? (
                     <Pill tone="primary" className="shrink-0">
                       Hoje
