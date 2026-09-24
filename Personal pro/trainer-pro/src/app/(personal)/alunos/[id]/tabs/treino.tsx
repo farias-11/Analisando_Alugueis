@@ -71,36 +71,59 @@ export async function TreinoTab({ alunoId }: { alunoId: string }) {
           itens.push({ principal: atual, continuacao: temContinuacao ? proximo : undefined });
         }
 
+        function linha({ principal: ex, continuacao }: (typeof itens)[number]) {
+          return (
+            <div key={ex.id} className="flex items-center justify-between text-sm">
+              <span className="flex flex-wrap items-center gap-1.5">
+                {ex.exercicio.nome}
+                {ex.eh_aquecimento && (
+                  <span className="flex items-center gap-0.5 rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
+                    <Flame size={10} /> Aquecimento
+                  </span>
+                )}
+              </span>
+              <span className="text-muted">
+                {ex.tipo === "cardio"
+                  ? `${ex.duracao_min ?? "—"}min${ex.intensidade ? ` · ${ex.intensidade}` : ""}`
+                  : continuacao
+                    ? `${continuacao.series}x${continuacao.repeticoes} +${ex.series} aquec. · ${continuacao.descanso_seg ?? "—"}s`
+                    : `${ex.series}x${ex.repeticoes}${ex.carga_inicial ? ` · ${ex.carga_inicial}kg` : ""} · ${ex.descanso_seg ?? "—"}s`}
+              </span>
+            </div>
+          );
+        }
+
+        // mesma regra de pareamento de treinos.ts/agrupar-biset.ts — um item
+        // com combina_proximo forma bi-set com o próximo item de "itens"
+        // (aquecimento já foi colapsado acima, então os índices aqui já são
+        // só exercícios "de verdade").
+        const grupos: { item: (typeof itens)[number]; parceiro?: (typeof itens)[number] }[] = [];
+        for (let i = 0; i < itens.length; i++) {
+          if (i > 0 && itens[i - 1].principal.combina_proximo) continue;
+          const item = itens[i];
+          grupos.push({ item, parceiro: item.principal.combina_proximo ? itens[i + 1] : undefined });
+        }
+
         return (
           <Card key={aula.id}>
             <CardTitle className="mb-2">{aula.nome}</CardTitle>
             <div className="space-y-1.5">
-              {itens.map(({ principal: ex, continuacao }, i) => (
-                <div key={ex.id}>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex flex-wrap items-center gap-1.5">
-                      {ex.exercicio.nome}
-                      {ex.eh_aquecimento && (
-                        <span className="flex items-center gap-0.5 rounded-pill bg-warning-soft px-1.5 py-0.5 text-[10px] font-medium text-warning">
-                          <Flame size={10} /> Aquecimento
-                        </span>
-                      )}
-                    </span>
-                    <span className="text-muted">
-                      {ex.tipo === "cardio"
-                        ? `${ex.duracao_min ?? "—"}min${ex.intensidade ? ` · ${ex.intensidade}` : ""}`
-                        : continuacao
-                          ? `${continuacao.series}x${continuacao.repeticoes} +${ex.series} aquec. · ${continuacao.descanso_seg ?? "—"}s`
-                          : `${ex.series}x${ex.repeticoes}${ex.carga_inicial ? ` · ${ex.carga_inicial}kg` : ""} · ${ex.descanso_seg ?? "—"}s`}
-                    </span>
-                  </div>
-                  {ex.combina_proximo && i < itens.length - 1 && (
-                    <p className="mt-0.5 flex items-center gap-1 text-[11px] text-primary">
-                      <Link2 size={11} /> Bi-set com o próximo — faz os dois sem descanso entre eles
+              {grupos.map(({ item, parceiro }) =>
+                parceiro ? (
+                  <div
+                    key={item.principal.id}
+                    className="space-y-1 rounded-lg border border-primary/30 bg-primary-soft/20 p-1.5"
+                  >
+                    <p className="flex items-center gap-1 px-1 text-[11px] font-semibold text-primary-dark">
+                      <Link2 size={11} /> Bi-set
                     </p>
-                  )}
-                </div>
-              ))}
+                    {linha(item)}
+                    {linha(parceiro)}
+                  </div>
+                ) : (
+                  linha(item)
+                )
+              )}
               {itens.length === 0 && (
                 <p className="text-sm text-muted">Nenhum exercício adicionado ainda.</p>
               )}
