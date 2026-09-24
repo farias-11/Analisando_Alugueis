@@ -1,6 +1,7 @@
 import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { redirect } from "next/navigation";
 import type { Admin, Aluno, Personal } from "@/lib/types";
 
@@ -36,7 +37,31 @@ export const requireAluno = cache(async (): Promise<{ aluno: Aluno; email: strin
     .eq("auth_user_id", user.id)
     .maybeSingle();
 
-  if (!aluno) redirect("/login");
+  if (!aluno) {
+    // Conta autenticada (senha válida) mas sem nenhum aluno vinculado a ela
+    // ainda — bug real já visto: o convite chegou a autenticar e confirmar o
+    // e-mail, mas o passo final de vínculo (aceitarConvite) não completou por
+    // algum motivo, deixando status_convite "pendente" pra sempre. Sem essa
+    // checagem, login com e-mail/senha aqui simplesmente devolvia pro /login
+    // sem NENHUMA mensagem — parecia "senha errada" pro aluno, mesmo com a
+    // senha certa. Se existe um convite pendente com esse e-mail, manda
+    // terminar o cadastro em vez de um beco sem saída silencioso. Usa o
+    // client admin (ignora RLS) de propósito: a policy de select de aluno só
+    // libera a PRÓPRIA linha via auth_user_id, que ainda não existe pra essa
+    // conta — com o client normal essa busca nunca acharia nada, mesmo
+    // quando existe convite pendente de verdade. Seguro aqui porque o
+    // e-mail vem da sessão já autenticada (JWT validado), não de entrada
+    // do usuário.
+    const admin = createAdminClient();
+    const { data: pendente } = await admin
+      .from("alunos")
+      .select("id")
+      .ilike("email", user.email ?? "")
+      .eq("status_convite", "pendente")
+      .maybeSingle();
+    if (pendente) redirect(`/convite/aceitar?alunoId=${pendente.id}`);
+    redirect("/login?erro=convite_invalido");
+  }
 
   return { aluno: aluno as Aluno, email: user.email ?? "" };
 });

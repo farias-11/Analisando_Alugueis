@@ -1,7 +1,19 @@
 import { BrandGlyph } from "@/components/brand/glyph";
 import { LoginForm } from "./login-form";
 
-export default function LoginPage() {
+const MENSAGENS_ERRO: Record<string, string> = {
+  convite_invalido:
+    "Seu link de convite expirou ou já foi usado. Peça um novo convite ao seu personal — ou, se já tinha criado a senha antes, tente entrar com ela abaixo.",
+};
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ erro?: string }>;
+}) {
+  const { erro } = await searchParams;
+  const erroInicial = erro ? MENSAGENS_ERRO[erro] : undefined;
+
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center bg-background px-6">
       <div className="w-full max-w-sm">
@@ -15,7 +27,7 @@ export default function LoginPage() {
           </div>
         </div>
 
-        <LoginForm />
+        <LoginForm erroInicial={erroInicial} />
 
         <p className="mt-6 text-center text-xs text-muted-2">
           Acesso restrito. Alunos entram pelo link de convite enviado pelo personal.

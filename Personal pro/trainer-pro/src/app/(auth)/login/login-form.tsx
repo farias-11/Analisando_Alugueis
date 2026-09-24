@@ -6,8 +6,9 @@ import { login } from "@/app/actions/auth";
 import { Button } from "@/components/ui/button";
 import { Field, Input } from "@/components/ui/form";
 
-export function LoginForm() {
+export function LoginForm({ erroInicial }: { erroInicial?: string }) {
   const [state, formAction, pending] = useActionState(login, undefined);
+  const erro = state?.error ?? erroInicial;
 
   return (
     <form action={formAction} className="space-y-4">
@@ -20,7 +21,7 @@ export function LoginForm() {
       <Link href="/esqueci-senha" className="-mt-2 block text-right text-xs text-primary">
         Esqueci minha senha
       </Link>
-      {state?.error ? <p className="text-sm text-danger">{state.error}</p> : null}
+      {erro ? <p className="text-sm text-danger">{erro}</p> : null}
       <Button type="submit" className="w-full" disabled={pending}>
         {pending ? "Entrando..." : "Entrar"}
       </Button>
