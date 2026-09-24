@@ -154,16 +154,18 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
   return aulasOrdenadas[(indiceAtual + 1) % aulasOrdenadas.length];
 }
 
-/** Status de cada exercício de uma aula desde uma data (aquecimento +
+/** Status de cada exercício de uma aula num período [desde, até) (aquecimento +
  * continuação do mesmo exercício contam como um item só; cardio conta como
- * feito com qualquer registro no período) — parametrizado por "desde" pra
- * dar pra checar tanto "terminou hoje" (getStatusExerciciosAulaHoje) quanto
- * "terminou essa semana" (getAderenciaSemana) com a MESMA regra de "treino
- * inteiro" (todo exercício com as séries batidas), sem duplicar a lógica de
- * agrupamento aquecimento/bi-set/cardio nos dois lugares — bug real já visto
- * aqui: a meta semanal contava a aula como concluída com só 1 série de 1
- * exercício registrada, longe do treino inteiro. */
-export async function getStatusExerciciosAulaDesde(alunoId: string, aulaId: string, desde: Date) {
+ * feito com qualquer registro no período) — parametrizado por "desde"/"até"
+ * pra dar pra checar "terminou hoje" (getStatusExerciciosAulaHoje), "terminou
+ * essa semana" (getAderenciaSemana) e "terminou NESSE DIA especificamente"
+ * (getResumoEvolucao, aderência — "até" é o dia seguinte) com a MESMA regra
+ * de "treino inteiro" (todo exercício com as séries batidas), sem duplicar a
+ * lógica de agrupamento aquecimento/bi-set/cardio em três lugares — bug real
+ * já visto aqui: tanto a meta semanal quanto a aderência contavam a
+ * sessão/aula como feita com só 1 série de 1 exercício registrada, longe do
+ * treino inteiro. */
+export async function getStatusExerciciosAulaDesde(alunoId: string, aulaId: string, desde: Date, ate?: Date) {
   const exercicios = await getExerciciosDaAula(aulaId);
   if (exercicios.length === 0) {
     return { itens: [] as { aulaExercicioId: string; concluido: boolean }[], todosConcluidos: false, algumaExecucao: false };
@@ -171,12 +173,14 @@ export async function getStatusExerciciosAulaDesde(alunoId: string, aulaId: stri
 
   const supabase = await createClient();
   const ids = exercicios.map((e) => e.id);
-  const { data: execs } = await supabase
+  let query = supabase
     .from("execucoes")
     .select("aula_exercicio_id")
     .eq("aluno_id", alunoId)
     .in("aula_exercicio_id", ids)
     .gte("data", desde.toISOString());
+  if (ate) query = query.lt("data", ate.toISOString());
+  const { data: execs } = await query;
 
   const contagem = new Map<string, number>();
   for (const e of execs ?? []) contagem.set(e.aula_exercicio_id, (contagem.get(e.aula_exercicio_id) ?? 0) + 1);

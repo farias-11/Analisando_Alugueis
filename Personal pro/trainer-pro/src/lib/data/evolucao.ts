@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { diasDesde, type Tendencia } from "@/lib/status";
+import { getStatusExerciciosAulaDesde } from "@/lib/data/aluno";
+import { diasDesde, inicioDoDiaBrasil, type Tendencia } from "@/lib/status";
 
 export interface ResumoEvolucao {
   pesoDeltaKg: number | null;
@@ -150,14 +151,36 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
       .eq("aluno_id", alunoId)
       .gte("data", inicioJanela.toISOString());
 
-    const metaSessoes = Math.max((aulas?.length ?? 0) * (diasNaJanela / 7), 1);
-    const sessoesFeitas = new Set(
-      ((execs ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[])
-        .filter((e) => e.aula_exercicios?.aula_id)
-        .map((e) => `${e.aula_exercicios!.aula_id}_${e.data.slice(0, 10)}`)
+    // "sessão feita" (aula x dia) só conta de verdade quando o treino
+    // INTEIRO daquele dia foi concluído — não só ter tocado em algum
+    // exercício. Bug real já visto aqui: 1 série de 1 exercício já bastava
+    // pra contar uma sessão inteira, inflando a aderência (mesma classe do
+    // bug já corrigido na meta semanal). As linhas de execuções só servem
+    // aqui pra achar os pares (aula, dia) CANDIDATOS a conferir — a
+    // contagem de verdade vem de getStatusExerciciosAulaDesde, checando
+    // cada dia isoladamente ([meia-noite Brasília desse dia, meia-noite do
+    // dia seguinte)). Dia calculado via inicioDoDiaBrasil (não data.slice(0,10)
+    // cru, que é UTC) — um treino feito às 22h de SP já é 01h em UTC do dia
+    // seguinte, e fatiar por UTC fragmentava uma sessão só em dois dias,
+    // fazendo nenhum dos dois bater o treino inteiro.
+    const paresCandidatos = new Map<string, { aulaId: string; diaInicio: Date }>();
+    for (const e of (execs ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[]) {
+      const aulaId = e.aula_exercicios?.aula_id;
+      if (!aulaId) continue;
+      const diaInicio = inicioDoDiaBrasil(new Date(e.data));
+      paresCandidatos.set(`${aulaId}_${diaInicio.getTime()}`, { aulaId, diaInicio });
+    }
+    const statusPorPar = await Promise.all(
+      Array.from(paresCandidatos.values()).map(({ aulaId, diaInicio }) => {
+        const diaFim = new Date(diaInicio.getTime() + 86_400_000);
+        return getStatusExerciciosAulaDesde(alunoId, aulaId, diaInicio, diaFim);
+      })
     );
 
-    aderenciaPct = Math.min(100, Math.round((sessoesFeitas.size / metaSessoes) * 100));
+    const metaSessoes = Math.max((aulas?.length ?? 0) * (diasNaJanela / 7), 1);
+    const sessoesFeitas = statusPorPar.filter((s) => s.todosConcluidos).length;
+
+    aderenciaPct = Math.min(100, Math.round((sessoesFeitas / metaSessoes) * 100));
   }
   const aderenciaTendencia: Tendencia =
     aderenciaPct >= 70 ? "positiva" : aderenciaPct >= 40 ? "neutra" : "negativa";
