@@ -4,13 +4,21 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: __dirname,
   },
+  // ffmpeg-static só exporta o CAMINHO do binário (path.join(__dirname, ...))
+  // — empacotar isso via webpack/turbopack quebraria essa resolução. Usa
+  // require nativo do Node em vez disso, e garante que o binário (sibling
+  // file, não importado via JS) entra no rastreamento de arquivos da function
+  // serverless. Ver src/lib/video-faststart.ts.
+  serverExternalPackages: ["ffmpeg-static"],
   experimental: {
-    // padrão do Next é 1MB — foto de celular real (avatar, exercício, progresso,
-    // tickets) passa disso fácil. Sem isso, todo upload de imagem do app falha
-    // com erro 500 genérico assim que o arquivo é "grande" de verdade. 25mb dá
-    // folga pra quem anexa várias fotos de uma vez no ticket de suporte.
+    // padrão do Next é 1MB — foto/vídeo de celular real (avatar, exercício,
+    // progresso, tickets) passa disso fácil. Sem isso, todo upload de arquivo
+    // do app falha com erro 500 genérico assim que o arquivo é "grande" de
+    // verdade. 100mb dá folga real pra vídeo de exercício gravado no celular
+    // (visto na prática: 37MB só de um clipe curto) — 25mb já não bastava nem
+    // pra isso, sobrava só pra foto.
     serverActions: {
-      bodySizeLimit: "25mb",
+      bodySizeLimit: "100mb",
     },
     // desde o Next 15 o cache de prefetch de rota dinâmica é 0s por padrão —
     // como quase toda rota nossa é dinâmica (usa cookies/sessão) e tem várias

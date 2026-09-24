@@ -2,15 +2,38 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { requirePersonal } from "@/lib/data/current-user";
+import { remuxParaFaststart } from "@/lib/video-faststart";
 import { revalidatePath } from "next/cache";
 import { EXERCICIOS_PADRAO } from "@/lib/exercicios-padrao";
 
 export type CriarExercicioState = { error?: string } | undefined;
 
+type SupaClient = Awaited<ReturnType<typeof createClient>>;
+
 function tipoMidia(file: File): "video" | "gif" | "imagem" {
   if (file.type === "image/gif") return "gif";
   if (file.type.startsWith("video/")) return "video";
   return "imagem";
+}
+
+/** Sobe um arquivo de mídia pro storage e registra em exercicio_midias —
+ * compartilhado entre criarExercicio/atualizarExercicio (evita duplicar a
+ * mesma lógica duas vezes, ver regra em aluno.ts sobre não reimplementar a
+ * mesma coisa em vários lugares). Vídeo passa pelo remux de faststart antes
+ * de subir (ver video-faststart.ts) — celular grava com o metadado no fim
+ * do arquivo, o que quebra o botão de tela cheia em alguns navegadores. */
+async function uploadMidiaExercicio(supabase: SupaClient, exercicioId: string, arquivo: File) {
+  if (!arquivo || arquivo.size === 0) return;
+  const tipo = tipoMidia(arquivo);
+  const bytes =
+    tipo === "video" ? await remuxParaFaststart(Buffer.from(await arquivo.arrayBuffer()), arquivo.name) : arquivo;
+
+  const path = `${exercicioId}/${Date.now()}-${arquivo.name}`;
+  const { data: upload } = await supabase.storage.from("exercicios").upload(path, bytes, { contentType: arquivo.type });
+  if (upload) {
+    const { data: pub } = supabase.storage.from("exercicios").getPublicUrl(upload.path);
+    await supabase.from("exercicio_midias").insert({ exercicio_id: exercicioId, url: pub.publicUrl, tipo });
+  }
 }
 
 export async function criarExercicio(
@@ -53,23 +76,7 @@ export async function criarExercicio(
 
   if (midiaTipo === "upload") {
     // cada arquivo é independente — sobe todos em paralelo em vez de um de cada vez
-    await Promise.all(
-      arquivos.map(async (arquivo) => {
-        if (!arquivo || arquivo.size === 0) return;
-        const path = `${exercicio.id}/${Date.now()}-${arquivo.name}`;
-        const { data: upload } = await supabase.storage
-          .from("exercicios")
-          .upload(path, arquivo, { contentType: arquivo.type });
-        if (upload) {
-          const { data: pub } = supabase.storage.from("exercicios").getPublicUrl(upload.path);
-          await supabase.from("exercicio_midias").insert({
-            exercicio_id: exercicio.id,
-            url: pub.publicUrl,
-            tipo: tipoMidia(arquivo),
-          });
-        }
-      })
-    );
+    await Promise.all(arquivos.map((arquivo) => uploadMidiaExercicio(supabase, exercicio.id, arquivo)));
   }
 
   revalidatePath("/biblioteca");
@@ -117,23 +124,7 @@ export async function atualizarExercicio(
   }
 
   if (midiaTipo === "upload" && arquivos.some((a) => a && a.size > 0)) {
-    await Promise.all(
-      arquivos.map(async (arquivo) => {
-        if (!arquivo || arquivo.size === 0) return;
-        const path = `${exercicio.id}/${Date.now()}-${arquivo.name}`;
-        const { data: upload } = await supabase.storage
-          .from("exercicios")
-          .upload(path, arquivo, { contentType: arquivo.type });
-        if (upload) {
-          const { data: pub } = supabase.storage.from("exercicios").getPublicUrl(upload.path);
-          await supabase.from("exercicio_midias").insert({
-            exercicio_id: exercicio.id,
-            url: pub.publicUrl,
-            tipo: tipoMidia(arquivo),
-          });
-        }
-      })
-    );
+    await Promise.all(arquivos.map((arquivo) => uploadMidiaExercicio(supabase, exercicio.id, arquivo)));
   }
 
   revalidatePath("/biblioteca");
