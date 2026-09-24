@@ -103,7 +103,14 @@ export default async function TreinoDoDiaPage() {
       emAndamento: algumaExecucao && !todosConcluidos,
     };
   });
-  const totalExerciciosHoje = aulaHoje ? exerciciosPorAula[aulas.findIndex((a) => a.id === aulaHoje.id)].length : 0;
+  const indiceHoje = aulaHoje ? aulas.findIndex((a) => a.id === aulaHoje.id) : -1;
+  const totalExerciciosHoje = indiceHoje >= 0 ? exerciciosPorAula[indiceHoje].length : 0;
+  const statusHoje = indiceHoje >= 0 ? statusPorAula[indiceHoje] : null;
+  // com o treino de hoje em andamento, o botão pula direto pro primeiro
+  // exercício ainda não concluído em vez de mandar pra lista de novo — o
+  // aluno não precisa procurar onde parou (mesmo comportamento da Home).
+  const proximoExercicioIdHoje = statusHoje?.itens.find((i) => !i.concluido)?.aulaExercicioId ?? null;
+  const hojeEmAndamento = statusHoje ? statusHoje.algumaExecucao && !statusHoje.todosConcluidos : false;
 
   return (
     <div>
@@ -117,10 +124,18 @@ export default async function TreinoDoDiaPage() {
         </div>
 
         {aulaHoje ? (
-          <Link href={`/treino/${aulaHoje.id}`}>
+          <Link
+            href={
+              hojeEmAndamento && proximoExercicioIdHoje
+                ? `/treino/${aulaHoje.id}/exercicio/${proximoExercicioIdHoje}`
+                : `/treino/${aulaHoje.id}`
+            }
+          >
             <Card className="relative flex flex-col overflow-hidden bg-primary p-5 text-white">
               <Dumbbell size={26} strokeWidth={1.75} className="absolute right-5 top-5 text-white/35" />
-              <p className="text-xs font-semibold uppercase tracking-wide text-white/80">Próximo treino</p>
+              <p className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-white/80">
+                {hojeEmAndamento && <Clock size={12} />} {hojeEmAndamento ? "Em andamento" : "Próximo treino"}
+              </p>
               <p className="mt-1.5 max-w-[80%] text-2xl font-extrabold leading-tight">
                 {partesDoNome(aulaHoje.nome).subtitulo ?? aulaHoje.nome}
               </p>
@@ -129,7 +144,7 @@ export default async function TreinoDoDiaPage() {
                 {aulaHoje.duracao_estimada_min ? ` · ~${aulaHoje.duracao_estimada_min} min` : ""}
               </p>
               <div className="mt-4 flex w-full items-center justify-center gap-2 rounded-full bg-white py-3.5 text-center text-sm font-bold uppercase tracking-wide text-primary-dark">
-                <Play size={14} className="fill-current" /> Começar treino
+                <Play size={14} className="fill-current" /> {hojeEmAndamento ? "Continuar treino" : "Começar treino"}
               </div>
             </Card>
           </Link>

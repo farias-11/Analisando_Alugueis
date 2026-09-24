@@ -186,8 +186,13 @@ export default async function HomePage() {
   // (mesma checagem usada na rotação do próximo treino); emAndamento cobre o
   // caso do meio, "comecei mas ainda não terminei".
   const algumFeitoHoje = aulaHoje ? aulasFeitasHojeIds.has(aulaHoje.id) : false;
-  const jaFezHoje = aulaHoje && algumFeitoHoje ? (await getStatusExerciciosAulaHoje(aluno.id, aulaHoje.id)).todosConcluidos : false;
+  const statusHoje = aulaHoje && algumFeitoHoje ? await getStatusExerciciosAulaHoje(aluno.id, aulaHoje.id) : null;
+  const jaFezHoje = statusHoje?.todosConcluidos ?? false;
   const emAndamento = algumFeitoHoje && !jaFezHoje;
+  // com o treino em andamento, "Continuar treino" pula direto pro primeiro
+  // exercício ainda não concluído em vez de mandar pra lista — o aluno não
+  // precisa procurar de novo onde parou.
+  const proximoExercicioId = statusHoje?.itens.find((i) => !i.concluido)?.aulaExercicioId ?? null;
 
   const primeiroNome = aluno.nome.split(" ")[0];
   const saudacao = saudacaoPorHorario();
@@ -245,7 +250,7 @@ export default async function HomePage() {
             </p>
             <p className="mt-1 max-w-[85%] text-[var(--fs-hero)] font-bold leading-tight">{aulaHoje.nome}</p>
             <ButtonLink
-              href={`/treino/${aulaHoje.id}`}
+              href={proximoExercicioId ? `/treino/${aulaHoje.id}/exercicio/${proximoExercicioId}` : `/treino/${aulaHoje.id}`}
               size="sm"
               variant="secondary"
               className="mt-3 w-full bg-white text-primary-dark hover:bg-white/90"
