@@ -7,6 +7,7 @@ import { TopBar } from "@/components/nav/top-bar";
 import { DiasSemanaPicker } from "@/components/dias-semana-picker";
 import { TemplateExercicioRow } from "@/components/template-exercicio-row";
 import { AdicionarExercicioTemplateSection } from "@/components/adicionar-exercicio-template-section";
+import { agruparBiset } from "@/lib/agrupar-biset";
 import {
   criarTemplateAula,
   removerTemplateAula,
@@ -14,7 +15,7 @@ import {
   atualizarDiasSemanaTemplateAula,
   excluirTemplate,
 } from "@/app/actions/templates";
-import { ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Link2, Trash2 } from "lucide-react";
 import type { TemplateAula, TemplateAulaExercicio, Exercicio } from "@/lib/types";
 
 export default async function EditorTemplatePage({
@@ -116,17 +117,41 @@ export default async function EditorTemplatePage({
             </div>
 
             <div className="space-y-2">
-              {aula.template_aula_exercicios.map((ex, exIndex) => (
-                <TemplateExercicioRow
-                  key={ex.id}
-                  ex={ex}
-                  templateId={templateId}
-                  templateAulaId={aula.id}
-                  biblioteca={biblioteca}
-                  ehPrimeiro={exIndex === 0}
-                  ehUltimo={exIndex === aula.template_aula_exercicios.length - 1}
-                />
-              ))}
+              {agruparBiset(aula.template_aula_exercicios).map(({ ex, exIndex, parceiro, parceiroIndex }) =>
+                parceiro ? (
+                  <div key={ex.id} className="space-y-1.5 rounded-xl border border-primary/30 bg-primary-soft/20 p-1.5">
+                    <p className="flex items-center gap-1 px-1 text-[11px] font-semibold text-primary-dark">
+                      <Link2 size={11} /> Bi-set
+                    </p>
+                    <TemplateExercicioRow
+                      ex={ex}
+                      templateId={templateId}
+                      templateAulaId={aula.id}
+                      biblioteca={biblioteca}
+                      ehPrimeiro={exIndex === 0}
+                      ehUltimo={false}
+                    />
+                    <TemplateExercicioRow
+                      ex={parceiro}
+                      templateId={templateId}
+                      templateAulaId={aula.id}
+                      biblioteca={biblioteca}
+                      ehPrimeiro={false}
+                      ehUltimo={parceiroIndex === aula.template_aula_exercicios.length - 1}
+                    />
+                  </div>
+                ) : (
+                  <TemplateExercicioRow
+                    key={ex.id}
+                    ex={ex}
+                    templateId={templateId}
+                    templateAulaId={aula.id}
+                    biblioteca={biblioteca}
+                    ehPrimeiro={exIndex === 0}
+                    ehUltimo={exIndex === aula.template_aula_exercicios.length - 1}
+                  />
+                )
+              )}
             </div>
 
             <AdicionarExercicioTemplateSection

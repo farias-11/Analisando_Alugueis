@@ -10,6 +10,7 @@ import { RealtimeTreinoSync } from "@/components/realtime-treino-sync";
 import { TopBar } from "@/components/nav/top-bar";
 import { AdicionarExercicioSection } from "@/components/adicionar-exercicio-section";
 import { ExercicioAulaRow } from "@/components/exercicio-aula-row";
+import { agruparBiset } from "@/lib/agrupar-biset";
 import {
   atualizarDuracaoCiclo,
   criarAula,
@@ -24,7 +25,7 @@ import { RenovarCicloModal } from "@/components/renovar-ciclo-modal";
 import { Badge } from "@/components/ui/badge";
 import { DiasSemanaPicker } from "@/components/dias-semana-picker";
 import { statusCiclo } from "@/lib/status";
-import { AlertTriangle, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Link2, Trash2 } from "lucide-react";
 
 export default async function EditorTreinoPage({
   params,
@@ -258,18 +259,44 @@ export default async function EditorTreinoPage({
                   </div>
 
                   <div className="space-y-2">
-                    {exs.map((ex, exIndex) => (
-                      <ExercicioAulaRow
-                        key={ex.id}
-                        ex={ex}
-                        alunoId={alunoId}
-                        aulaId={aula.id}
-                        biblioteca={biblioteca}
-                        nomesComTicketRecente={Array.from(nomesComTicketRecente)}
-                        ehPrimeiro={exIndex === 0}
-                        ehUltimo={exIndex === exs.length - 1}
-                      />
-                    ))}
+                    {agruparBiset(exs).map(({ ex, exIndex, parceiro, parceiroIndex }) =>
+                      parceiro ? (
+                        <div key={ex.id} className="space-y-1.5 rounded-xl border border-primary/30 bg-primary-soft/20 p-1.5">
+                          <p className="flex items-center gap-1 px-1 text-[11px] font-semibold text-primary-dark">
+                            <Link2 size={11} /> Bi-set
+                          </p>
+                          <ExercicioAulaRow
+                            ex={ex}
+                            alunoId={alunoId}
+                            aulaId={aula.id}
+                            biblioteca={biblioteca}
+                            nomesComTicketRecente={Array.from(nomesComTicketRecente)}
+                            ehPrimeiro={exIndex === 0}
+                            ehUltimo={false}
+                          />
+                          <ExercicioAulaRow
+                            ex={parceiro}
+                            alunoId={alunoId}
+                            aulaId={aula.id}
+                            biblioteca={biblioteca}
+                            nomesComTicketRecente={Array.from(nomesComTicketRecente)}
+                            ehPrimeiro={false}
+                            ehUltimo={parceiroIndex === exs.length - 1}
+                          />
+                        </div>
+                      ) : (
+                        <ExercicioAulaRow
+                          key={ex.id}
+                          ex={ex}
+                          alunoId={alunoId}
+                          aulaId={aula.id}
+                          biblioteca={biblioteca}
+                          nomesComTicketRecente={Array.from(nomesComTicketRecente)}
+                          ehPrimeiro={exIndex === 0}
+                          ehUltimo={exIndex === exs.length - 1}
+                        />
+                      )
+                    )}
                   </div>
 
                   <AdicionarExercicioSection

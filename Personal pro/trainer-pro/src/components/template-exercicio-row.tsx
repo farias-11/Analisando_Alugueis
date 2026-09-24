@@ -7,7 +7,7 @@ import {
   moverExercicioTemplateAula,
   removerExercicioTemplateAula,
 } from "@/app/actions/templates";
-import { ChevronDown, ChevronUp, Flame, Link2, Pencil, Trash2 } from "lucide-react";
+import { ChevronDown, ChevronUp, Flame, Pencil, Trash2 } from "lucide-react";
 import type { TemplateAulaExercicio, Exercicio } from "@/lib/types";
 
 /** Igual ExercicioAulaRow, mas pro editor de template — mesmas ações de
@@ -114,11 +114,6 @@ export function TemplateExercicioRow({
           </form>
         </div>
       </div>
-      {ex.combina_proximo && !ehUltimo && (
-        <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-primary">
-          <Link2 size={11} /> Bi-set com o próximo — faz os dois sem descanso entre eles
-        </p>
-      )}
     </div>
   );
 }

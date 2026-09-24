@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { ExercicioAulaForm, type ExercicioBiblioteca } from "@/components/exercicio-aula-form";
 import { atualizarExercicioAula, moverExercicioAula, removerExercicioAula } from "@/app/actions/treinos";
-import { AlertTriangle, ChevronDown, ChevronUp, Flame, Link2, Pencil, Trash2 } from "lucide-react";
+import { AlertTriangle, ChevronDown, ChevronUp, Flame, Pencil, Trash2 } from "lucide-react";
 import type { AulaExercicio, Exercicio } from "@/lib/types";
 
 export function ExercicioAulaRow({
@@ -113,11 +113,6 @@ export function ExercicioAulaRow({
           </form>
         </div>
       </div>
-      {ex.combina_proximo && !ehUltimo && (
-        <p className="mt-1.5 flex items-center gap-1 text-[11px] font-medium text-primary">
-          <Link2 size={11} /> Bi-set com o próximo — faz os dois sem descanso entre eles
-        </p>
-      )}
     </div>
   );
 }
