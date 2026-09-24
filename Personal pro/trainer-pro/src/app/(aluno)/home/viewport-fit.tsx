@@ -31,6 +31,7 @@ const TAMANHOS = {
   "--fs-hero": [18, 29],
   "--fs-name": [20, 32],
   "--circle": [36, 58],
+  "--ring": [48, 78],
   "--pad-card": [9, 34],
   "--pad-inner": [7, 20],
   "--gap-card": [6, 26],

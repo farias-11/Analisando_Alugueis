@@ -12,16 +12,45 @@ import { saudacaoPorHorario, type Tendencia } from "@/lib/status";
 import { Card, CardTitle } from "@/components/ui/card";
 import { ButtonLink } from "@/components/ui/button";
 import { ViewportFit } from "./viewport-fit";
-import { Check, CheckCircle2, Clock, Dumbbell, Minus, Play, TrendingDown, TrendingUp } from "lucide-react";
+import { CheckCircle2, Clock, Dumbbell, Minus, Play, TrendingDown, TrendingUp } from "lucide-react";
 
-// legenda abaixo dos círculos da meta semanal — regra simples baseada no
-// progresso real da semana, sem IA (handoff da Home do aluno, seção 2.3)
-function legendaMetaSemanal(concluidas: number, meta: number): string {
-  if (meta <= 0) return "";
-  if (concluidas >= meta) return "Meta da semana concluída! 🎉";
-  if (concluidas === 0) return "Bora começar a semana!";
-  if (concluidas / meta >= 0.6) return "Você está no caminho!";
-  return "Ainda dá tempo de bater a meta.";
+// Anel de progresso da meta semanal — substitui a fileira de bolinhas
+// (não dava pra ver "quanto falta" de relance, só contar uma por uma).
+// Raio 42 sobre viewBox 100x100 é só a unidade do desenho (não px de tela
+// nenhum) — o tamanho real vem do --ring (viewport-fit.tsx, mesma escala
+// que --circle usava). -rotate-90 faz o traço começar no topo (12h) em vez
+// do padrão do SVG (3h).
+function AnelMetaSemanal({ concluidas, meta }: { concluidas: number; meta: number }) {
+  const raio = 42;
+  const perimetro = 2 * Math.PI * raio;
+  const fracao = meta > 0 ? Math.min(1, concluidas / meta) : 0;
+  const bateuMeta = meta > 0 && concluidas >= meta;
+
+  return (
+    <div className="relative shrink-0" style={{ width: "var(--ring)", height: "var(--ring)" }}>
+      <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90">
+        <circle cx="50" cy="50" r={raio} fill="none" strokeWidth="10" className="text-neutral-soft" stroke="currentColor" />
+        <circle
+          cx="50"
+          cy="50"
+          r={raio}
+          fill="none"
+          strokeWidth="10"
+          strokeLinecap="round"
+          stroke="currentColor"
+          className={bateuMeta ? "text-success" : "text-primary"}
+          strokeDasharray={perimetro}
+          strokeDashoffset={perimetro * (1 - fracao)}
+          style={{ transition: "stroke-dashoffset 0.4s ease" }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <span className="text-[var(--fs-num)] font-bold leading-none">
+          {concluidas}/{meta}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 // Card de fechamento: uma frase por situação real do aluno, não uma genérica
@@ -259,29 +288,11 @@ export default async function HomePage() {
         style={{ padding: "var(--pad-card)", marginBottom: "var(--gap-card)" }}
         className="flex shrink-0 flex-col justify-center md:flex-1"
       >
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-[var(--fs-label)]">Meta semanal</CardTitle>
-          <span className="text-[var(--fs-tiny)] font-semibold text-muted">
-            {concluidas} de {meta || "—"} treinos
-          </span>
-        </div>
+        <CardTitle className="text-[var(--fs-label)]">Meta semanal</CardTitle>
         {meta > 0 && (
-          <>
-            <div className="mt-3 flex justify-center gap-2">
-              {Array.from({ length: meta }, (_, i) => i < concluidas).map((feito, i) => (
-                <div
-                  key={i}
-                  style={{ height: "var(--circle)", width: "var(--circle)" }}
-                  className={`flex shrink-0 items-center justify-center rounded-full ${
-                    feito ? "bg-primary text-white" : "border-2 border-border text-border"
-                  }`}
-                >
-                  {feito && <Check size={18} strokeWidth={3} />}
-                </div>
-              ))}
-            </div>
-            <p className="mt-2 text-[var(--fs-tiny)] text-muted">{legendaMetaSemanal(concluidas, meta)}</p>
-          </>
+          <div className="mt-3 flex justify-center">
+            <AnelMetaSemanal concluidas={concluidas} meta={meta} />
+          </div>
         )}
       </Card>
       </div>
