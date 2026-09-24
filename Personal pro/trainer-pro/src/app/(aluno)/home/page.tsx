@@ -346,7 +346,7 @@ export default async function HomePage() {
         style={{ padding: "var(--pad-card)" }}
         className="flex shrink-0 flex-col justify-center bg-primary-soft md:flex-1"
       >
-        <p className="flex items-start gap-2 text-[var(--fs-num)] font-medium leading-snug text-foreground">
+        <p className="flex items-start gap-2 text-[var(--fs-tiny)] font-medium leading-snug text-foreground">
           <span>{fechamento.emoji}</span>
           {fechamento.texto}
         </p>
