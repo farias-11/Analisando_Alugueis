@@ -24,17 +24,31 @@ const REF_MAX = 804; // tela de 900px — a partir daqui a escala trava no máxi
 // preencher o espaço: tudo (fonte, padding, círculo, respiro entre cards)
 // visivelmente maior, não só um pouquinho. Testado até altura medida
 // ~835px (tela de ~930px) sem sobrar vão vazio em cima/embaixo.
+// Tetos de --pad-card/--gap-card/--ring reduzidos nesta rodada (eram
+// [9,34]/[6,26]/[60,96]): a Home ganhou mais conteúdo (linha extra na
+// saudação, texto ao lado do anel, lista de progresso) e o mesmo respiro
+// generoso de antes passou a estourar em telas médias/altas (~800-950px de
+// altura de tela — testado, chegava a ~60px de conteúdo cortado escondido
+// pelo overflow-hidden). Regra da Home é NUNCA rolar; testado de novo do
+// piso (568px) até bem alto (950px) sem sobrar overflow em nenhum ponto.
+// --ring e --fs-num com teto mais alto que o resto de propósito: medido que
+// em telas bem altas (900-950px) sobra 60-120px mesmo depois de tudo caber
+// (testado) — pedido explícito pra Meta semanal/Seu progresso aproveitarem
+// essa sobra em vez de virar só margem vazia. --pad-card/--gap-card/--fs-hero
+// continuam com o teto mais baixo (ver comentário acima) porque são os que
+// realmente pressionam o orçamento de altura perto do piso.
 const TAMANHOS = {
   "--fs-tiny": [11, 14],
   "--fs-label": [14, 19],
-  "--fs-num": [14, 22],
+  "--fs-num": [14, 26],
   "--fs-hero": [18, 29],
   "--fs-name": [20, 32],
   "--circle": [36, 58],
-  "--ring": [60, 96],
-  "--pad-card": [9, 34],
-  "--pad-inner": [7, 20],
-  "--gap-card": [6, 26],
+  "--ring": [56, 104],
+  "--pad-card": [9, 22],
+  "--pad-inner": [7, 26],
+  "--gap-card": [6, 16],
+  "--row-py": [4, 9],
 } as const;
 
 function calcularVariaveis(alturaDisponivel: number): React.CSSProperties {
@@ -58,6 +72,15 @@ const MEDIA_FLUXO_NATURAL = "(min-width: 768px), (orientation: landscape) and (m
 
 export function ViewportFit({ header, children }: { header?: ReactNode; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
+  // ref separada pro miolo (o div "flex-1 ... overflow-hidden" abaixo do
+  // header) — é ELE que precisa ser medido pra saber se o conteúdo real
+  // ultrapassa o espaço disponível. Medir isso na ref de fora (acima) não
+  // funciona: o miolo já declara overflow-hidden por conta própria, então o
+  // scrollHeight dele nunca "vaza" pra influenciar o scrollHeight do pai —
+  // de fora, o miolo sempre parece ter exatamente o tamanho da sua caixa,
+  // nunca do conteúdo (bug real: a rede de segurança abaixo nunca disparava,
+  // mesmo com conteúdo visivelmente cortado).
+  const contentRef = useRef<HTMLDivElement>(null);
   // valor inicial = o piso (nunca estoura no primeiro paint, antes de medir de verdade)
   const [altura, setAltura] = useState(CONTEUDO_MIN);
   // Sempre começa "false" (igual ao HTML renderizado no servidor, que não
@@ -68,6 +91,8 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
   // pra esse tipo de checagem client-only, não dá pra evitar com
   // inicializador preguiçoso sem quebrar a hydration.
   const [desktop, setDesktop] = useState(false);
+  // ver comentário na rede de segurança dentro de medir() abaixo
+  const [precisaRolar, setPrecisaRolar] = useState(false);
 
   useEffect(() => {
     const mq = window.matchMedia(MEDIA_FLUXO_NATURAL);
@@ -116,6 +141,27 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
       const disponivel = Math.max(320, alvo - excesso);
       el.style.height = `${disponivel}px`;
       setAltura(disponivel);
+
+      // Rede de segurança (mesma ideia do ScrollFit — ver scroll-fit.tsx):
+      // mesmo depois da correção acima, o conteúdo pode continuar mais alto
+      // que "disponivel" no piso mínimo de fonte/padding. "excesso" acima só
+      // enxerga overflow do DOCUMENTO inteiro, não overflow DENTRO deste
+      // container (escondido pelo overflow-hidden do miolo). Confere o
+      // overflow real do miolo e, se estourar, troca pra rolagem interna em
+      // vez de continuar escondendo conteúdo. Precisa ser num rAF (não aqui,
+      // síncrono): "vars" (tamanho de fonte/padding) só reflete a NOVA
+      // altura depois que o setAltura acima disparar um re-render do React
+      // — medir aqui em cima ainda veria o miolo com o tamanho de fonte
+      // ANTERIOR (bug real: conteúdo cortado sem a rolagem de segurança
+      // entrar, porque essa checagem rodava cedo demais, antes da fonte
+      // crescer pro tamanho final e só DEPOIS estourar).
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          const miolo = contentRef.current;
+          if (!miolo) return;
+          setPrecisaRolar(miolo.scrollHeight - miolo.clientHeight > 1);
+        });
+      });
 
       // Passo 3: reconfirma um frame depois (com o valor corrigido já
       // aplicado de verdade no DOM, não o otimista) — cobre qualquer
@@ -185,8 +231,11 @@ export function ViewportFit({ header, children }: { header?: ReactNode; children
           {header}
         </div>
       )}
-      <div className="flex flex-1 flex-col justify-center overflow-hidden">
-        <div style={{ ...vars }} className="flex flex-col px-4">
+      <div
+        ref={contentRef}
+        className={`flex flex-1 flex-col ${precisaRolar ? "justify-start overflow-y-auto overscroll-contain" : "justify-center overflow-hidden"}`}
+      >
+        <div style={{ ...vars }} className="flex flex-col px-4 pb-2">
           {children}
         </div>
       </div>

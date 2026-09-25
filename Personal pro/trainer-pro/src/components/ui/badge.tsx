@@ -28,10 +28,12 @@ export function Pill({
   children,
   tone = "neutral",
   className,
+  style,
 }: {
   children: React.ReactNode;
   tone?: "neutral" | "primary" | "success" | "warning" | "danger";
   className?: string;
+  style?: React.CSSProperties;
 }) {
   const tones = {
     neutral: "bg-neutral-soft text-muted",
@@ -42,6 +44,7 @@ export function Pill({
   };
   return (
     <span
+      style={style}
       className={cn(
         "inline-flex items-center rounded-pill px-2.5 py-1 text-xs font-medium",
         tones[tone],
