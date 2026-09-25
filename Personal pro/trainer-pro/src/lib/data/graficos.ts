@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { diaBrasilISO } from "@/lib/status";
 import type { ChartPoint } from "@/components/charts/simple-line-chart";
 
 function rotuloCurto(iso: string) {
@@ -99,7 +100,7 @@ export async function getGraficoCargaPrincipal(
   const maiorCargaPorDia = new Map<string, number>();
   for (const linha of linhas) {
     if (linha.aula_exercicios?.exercicio_id !== exIdEscolhido) continue;
-    const dia = linha.data.slice(0, 10);
+    const dia = diaBrasilISO(new Date(linha.data));
     const atual = maiorCargaPorDia.get(dia) ?? 0;
     if (linha.carga > atual) maiorCargaPorDia.set(dia, linha.carga);
   }

@@ -11,6 +11,15 @@ function partesDataBrasil(referencia: Date) {
   return { ano: valor("year"), mes: valor("month"), dia: valor("day") };
 }
 
+/** Data (YYYY-MM-DD) no calendário de Brasília — pra agrupar/rotular execuções
+ * por "dia do treino" sem o mesmo bug de fatiar `data.slice(0,10)` cru (isso é
+ * UTC: um treino feito às 22h-23h59 em SP já virou o dia seguinte em UTC, e
+ * aparecia com a data errada). Ver inicioDoDiaBrasil acima pra mais contexto. */
+export function diaBrasilISO(referencia: Date): string {
+  const { ano, mes, dia } = partesDataBrasil(referencia);
+  return `${ano}-${String(mes).padStart(2, "0")}-${String(dia).padStart(2, "0")}`;
+}
+
 /** Meia-noite de HOJE no horário de Brasília, como instante exato (não meia-
  * noite no fuso do servidor) — a Vercel roda em UTC, então "hoje" calculado
  * com new Date()+setHours(0,0,0,0) direto ficava até 3h deslocado do dia
