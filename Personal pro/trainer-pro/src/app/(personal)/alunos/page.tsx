@@ -20,7 +20,7 @@ export default async function ListaAlunosPage({
 }) {
   const { personal } = await requirePersonal();
   const filtros = await searchParams;
-  const alunos = await listarAlunos(personal.id, filtros);
+  const { alunos, truncado } = await listarAlunos(personal.id, filtros);
 
   return (
     <div className="space-y-4 p-4 md:p-0">
@@ -32,6 +32,12 @@ export default async function ListaAlunosPage({
       </div>
 
       <FiltrosAlunos />
+
+      {truncado && (
+        <p className="rounded-lg bg-warning-soft px-3 py-2 text-xs text-warning">
+          Mostrando os primeiros {alunos.length} alunos. Use a busca ou os filtros pra encontrar quem procura.
+        </p>
+      )}
 
       <AlunosListaSelecionavel alunos={alunos} />
     </div>

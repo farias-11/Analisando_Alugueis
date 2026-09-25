@@ -1,6 +1,6 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
-import { getStatusExerciciosAulaDesde } from "@/lib/data/aluno";
+import { calcularStatusExercicios } from "@/lib/data/aluno";
 import { diasDesde, inicioDoDiaBrasil, type Tendencia } from "@/lib/status";
 
 export interface ResumoEvolucao {
@@ -136,43 +136,59 @@ export async function getResumoEvolucao(alunoId: string): Promise<ResumoEvolucao
     const inicioJanela = new Date(Date.UTC(anoCiclo, mesCiclo - 1, diaCiclo, 3, 0, 0, 0));
     const diasNaJanela = Math.max(1, Math.round((Date.now() - inicioJanela.getTime()) / 86_400_000));
 
-    const { data: aulas } = await supabase.from("aulas").select("id").eq("ciclo_id", ciclo.id);
+    // aulas+aula_exercicios (embutido) e execuções não dependem um do outro —
+    // rodam em paralelo. Tudo em lote de propósito, nada de uma consulta por
+    // (aula, dia) — aluno com histórico longo (ex: 2 anos) tem dezenas de
+    // sessões candidatas, e isso virava dezenas de idas extras ao banco só
+    // pra essa conta.
+    const [{ data: aulas }, { data: execs }] = await Promise.all([
+      supabase.from("aulas").select("id, aula_exercicios(id, exercicio_id, series, tipo, eh_aquecimento, ordem)").eq("ciclo_id", ciclo.id),
+      supabase
+        .from("execucoes")
+        .select("aula_exercicio_id, data, aula_exercicios(aula_id)")
+        .eq("aluno_id", alunoId)
+        .gte("data", inicioJanela.toISOString()),
+    ]);
 
-    const { data: execs } = await supabase
-      .from("execucoes")
-      .select("data, aula_exercicios(aula_id)")
-      .eq("aluno_id", alunoId)
-      .gte("data", inicioJanela.toISOString());
+    type AulaExercicioLinha = { id: string; exercicio_id: string; series: number; tipo: string; eh_aquecimento: boolean; ordem: number };
+    const exerciciosPorAula = new Map<string, AulaExercicioLinha[]>();
+    for (const a of (aulas ?? []) as unknown as { id: string; aula_exercicios: AulaExercicioLinha[] }[]) {
+      exerciciosPorAula.set(a.id, (a.aula_exercicios ?? []).slice().sort((x, y) => x.ordem - y.ordem));
+    }
 
     // "sessão feita" (aula x dia) só conta de verdade quando o treino
     // INTEIRO daquele dia foi concluído — não só ter tocado em algum
     // exercício. Bug real já visto aqui: 1 série de 1 exercício já bastava
     // pra contar uma sessão inteira, inflando a aderência (mesma classe do
-    // bug já corrigido na meta semanal). As linhas de execuções só servem
-    // aqui pra achar os pares (aula, dia) CANDIDATOS a conferir — a
-    // contagem de verdade vem de getStatusExerciciosAulaDesde, checando
-    // cada dia isoladamente ([meia-noite Brasília desse dia, meia-noite do
-    // dia seguinte)). Dia calculado via inicioDoDiaBrasil (não data.slice(0,10)
-    // cru, que é UTC) — um treino feito às 22h de SP já é 01h em UTC do dia
-    // seguinte, e fatiar por UTC fragmentava uma sessão só em dois dias,
-    // fazendo nenhum dos dois bater o treino inteiro.
-    const paresCandidatos = new Map<string, { aulaId: string; diaInicio: Date }>();
-    for (const e of (execs ?? []) as unknown as { data: string; aula_exercicios: { aula_id: string } | null }[]) {
+    // bug já corrigido na meta semanal). Agrupa execuções por (aula, dia) e
+    // conta séries por aula_exercicio_id dentro de cada grupo — dá exatamente
+    // o que calcularStatusExercicios precisa, sem consulta extra por grupo.
+    // Dia calculado via inicioDoDiaBrasil (não data.slice(0,10) cru, que é
+    // UTC) — um treino feito às 22h de SP já é 01h em UTC do dia seguinte, e
+    // fatiar por UTC fragmentava uma sessão só em dois dias, fazendo nenhum
+    // dos dois bater o treino inteiro.
+    type Grupo = { aulaId: string; diaInicio: Date; contagem: Map<string, number> };
+    const gruposPorChave = new Map<string, Grupo>();
+    for (const e of (execs ?? []) as unknown as { aula_exercicio_id: string; data: string; aula_exercicios: { aula_id: string } | null }[]) {
       const aulaId = e.aula_exercicios?.aula_id;
       if (!aulaId) continue;
       const diaInicio = inicioDoDiaBrasil(new Date(e.data));
-      paresCandidatos.set(`${aulaId}_${diaInicio.getTime()}`, { aulaId, diaInicio });
+      const chave = `${aulaId}_${diaInicio.getTime()}`;
+      let grupo = gruposPorChave.get(chave);
+      if (!grupo) {
+        grupo = { aulaId, diaInicio, contagem: new Map() };
+        gruposPorChave.set(chave, grupo);
+      }
+      grupo.contagem.set(e.aula_exercicio_id, (grupo.contagem.get(e.aula_exercicio_id) ?? 0) + 1);
     }
-    const statusPorPar = await Promise.all(
-      Array.from(paresCandidatos.values()).map(({ aulaId, diaInicio }) => {
-        const diaFim = new Date(diaInicio.getTime() + 86_400_000);
-        return getStatusExerciciosAulaDesde(alunoId, aulaId, diaInicio, diaFim);
-      })
-    );
+
+    let sessoesFeitas = 0;
+    for (const grupo of gruposPorChave.values()) {
+      const exercicios = exerciciosPorAula.get(grupo.aulaId) ?? [];
+      if (calcularStatusExercicios(exercicios, grupo.contagem).todosConcluidos) sessoesFeitas++;
+    }
 
     const metaSessoes = Math.max((aulas?.length ?? 0) * (diasNaJanela / 7), 1);
-    const sessoesFeitas = statusPorPar.filter((s) => s.todosConcluidos).length;
-
     aderenciaPct = Math.min(100, Math.round((sessoesFeitas / metaSessoes) * 100));
   }
   const aderenciaTendencia: Tendencia =

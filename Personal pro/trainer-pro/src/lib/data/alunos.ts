@@ -8,6 +8,17 @@ export interface AlunoComTreino extends Aluno {
   planoValor: number | null;
 }
 
+// Teto de segurança — a tela ainda não tem paginação de verdade (os filtros
+// de treino/avaliação/urgência dependem de campos calculados DEPOIS da
+// consulta, então paginar direito exige mexer nessa lógica toda, não é troca
+// rápida). Sem NENHUM teto, uma base grande o bastante (visto num teste de
+// carga com 1000 alunos) renderiza a lista inteira de uma vez — pesado pro
+// navegador e sem necessidade real: nenhum personal folheia 300+ alunos
+// numa lista só, ele busca/filtra. 300 dá folga enorme pro uso real de hoje
+// e ainda protege o navegador se a base crescer muito antes da paginação
+// de verdade chegar.
+const TETO_LISTAGEM = 300;
+
 export async function listarAlunos(
   personalId: string,
   filtros?: {
@@ -19,7 +30,7 @@ export async function listarAlunos(
     semCheckin?: string;
     ordenar?: string;
   }
-): Promise<AlunoComTreino[]> {
+): Promise<{ alunos: AlunoComTreino[]; truncado: boolean }> {
   const supabase = await createClient();
 
   let query = supabase.from("alunos").select("*, planos(valor)").eq("personal_id", personalId);
@@ -27,7 +38,11 @@ export async function listarAlunos(
   if (filtros?.pagamento) query = query.eq("pagamento_status", filtros.pagamento);
   if (filtros?.status) query = query.eq("status", filtros.status);
 
-  const { data: alunos } = await query.order("nome", { ascending: true });
+  // busca 1 a mais que o teto só pra saber se estourou, sem precisar de um
+  // count() separado
+  const { data: alunosBrutos } = await query.order("nome", { ascending: true }).limit(TETO_LISTAGEM + 1);
+  const truncado = (alunosBrutos?.length ?? 0) > TETO_LISTAGEM;
+  const alunos = truncado ? alunosBrutos!.slice(0, TETO_LISTAGEM) : alunosBrutos;
   const lista = (alunos as unknown as (Aluno & { planos: { valor: number } | null })[]) ?? [];
 
   const { data: ciclos } = await supabase
@@ -62,7 +77,7 @@ export async function listarAlunos(
     comTreino = comTreino.slice().sort((a, b) => pontuarUrgencia(b) - pontuarUrgencia(a));
   }
 
-  return comTreino;
+  return { alunos: comTreino, truncado };
 }
 
 // Pontuação simples pra ordenar a lista por urgência (handoff, seção 4):

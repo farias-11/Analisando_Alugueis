@@ -169,15 +169,47 @@ export async function aulaDoDia(alunoId: string, aulas: Aula[]): Promise<Aula | 
 // deixar um comentário apontando pra cá.
 // ---------------------------------------------------------------------------
 
-/** Status de cada exercício de uma aula num período [desde, até) (aquecimento +
- * continuação do mesmo exercício contam como um item só; cardio conta como
- * feito com qualquer registro no período) — parametrizado por "desde"/"até"
- * pra dar pra checar "terminou hoje" (getStatusExerciciosAulaHoje), "terminou
- * essa semana" (getAderenciaSemana), "terminou o ciclo até agora"
- * (getResumoEvolucao/aderência, dashboard.ts) e "terminou NESSE DIA
- * especificamente" ("até" é o dia seguinte) com a MESMA regra de "treino
- * inteiro" (todo exercício com as séries batidas), sem duplicar a lógica de
- * agrupamento aquecimento/bi-set/cardio em cada lugar que precisa saber isso. */
+/** Parte PURA da regra (sem consulta nenhuma) — recebe os exercícios da aula
+ * (já ordenados) e uma contagem de séries por aula_exercicio_id já pronta, e
+ * devolve o mesmo resultado de getStatusExerciciosAulaDesde. Existe separada
+ * pra quem precisa checar MUITOS (aluno, aula, dia) de uma vez (ex:
+ * calcularAderenciaMedia no dashboard do personal, com centenas de alunos) —
+ * sem isso, cada checagem vira 2 idas ao banco, e centenas de checagens
+ * viram um N+1 real (bug real já visto aqui: dashboard levando ~6s com 200
+ * alunos ativos). Quem só precisa checar UM aluno/aula/período usa
+ * getStatusExerciciosAulaDesde, que já busca os dados e chama esta função. */
+export function calcularStatusExercicios(
+  exercicios: { id: string; exercicio_id: string; series: number; tipo: string; eh_aquecimento: boolean }[],
+  contagemPorAulaExercicio: Map<string, number>
+) {
+  const itens: { aulaExercicioId: string; concluido: boolean }[] = [];
+  for (let i = 0; i < exercicios.length; i++) {
+    const atual = exercicios[i];
+    const anterior = exercicios[i - 1];
+    if (anterior?.eh_aquecimento && anterior.exercicio_id === atual.exercicio_id) continue;
+    const proximo = exercicios[i + 1];
+    const temContinuacao = atual.eh_aquecimento && proximo && proximo.exercicio_id === atual.exercicio_id;
+    const feitoPrincipal = (contagemPorAulaExercicio.get(atual.id) ?? 0) >= atual.series;
+    const feitoContinuacao = !temContinuacao || (contagemPorAulaExercicio.get(proximo!.id) ?? 0) >= proximo!.series;
+    const concluido =
+      atual.tipo === "cardio"
+        ? (contagemPorAulaExercicio.get(atual.id) ?? 0) > 0
+        : feitoPrincipal && feitoContinuacao;
+    itens.push({ aulaExercicioId: atual.id, concluido });
+  }
+  const algumaExecucao = exercicios.some((e) => (contagemPorAulaExercicio.get(e.id) ?? 0) > 0);
+  return { itens, todosConcluidos: itens.length > 0 && itens.every((i) => i.concluido), algumaExecucao };
+}
+
+/** Status de cada exercício de uma aula num período [desde, até) — parametrizado
+ * por "desde"/"até" pra dar pra checar "terminou hoje"
+ * (getStatusExerciciosAulaHoje), "terminou essa semana" (getAderenciaSemana),
+ * "terminou o ciclo até agora" (getResumoEvolucao/aderência) e "terminou
+ * NESSE DIA especificamente" ("até" é o dia seguinte) com a MESMA regra de
+ * "treino inteiro" (todo exercício com as séries batidas). Busca os dados de
+ * UM aluno/aula e delega o cálculo pra calcularStatusExercicios acima —
+ * quem precisa checar vários de uma vez deve buscar em lote e chamar aquela
+ * função direto, não esta (ver o comentário dela). */
 export async function getStatusExerciciosAulaDesde(alunoId: string, aulaId: string, desde: Date, ate?: Date) {
   const exercicios = await getExerciciosDaAula(aulaId);
   if (exercicios.length === 0) {
@@ -197,24 +229,7 @@ export async function getStatusExerciciosAulaDesde(alunoId: string, aulaId: stri
 
   const contagem = new Map<string, number>();
   for (const e of execs ?? []) contagem.set(e.aula_exercicio_id, (contagem.get(e.aula_exercicio_id) ?? 0) + 1);
-
-  const itens: { aulaExercicioId: string; concluido: boolean }[] = [];
-  for (let i = 0; i < exercicios.length; i++) {
-    const atual = exercicios[i];
-    const anterior = exercicios[i - 1];
-    if (anterior?.eh_aquecimento && anterior.exercicio_id === atual.exercicio_id) continue;
-    const proximo = exercicios[i + 1];
-    const temContinuacao = atual.eh_aquecimento && proximo && proximo.exercicio_id === atual.exercicio_id;
-    const feitoPrincipal = (contagem.get(atual.id) ?? 0) >= atual.series;
-    const feitoContinuacao = !temContinuacao || (contagem.get(proximo!.id) ?? 0) >= proximo!.series;
-    const concluido = atual.tipo === "cardio" ? (contagem.get(atual.id) ?? 0) > 0 : feitoPrincipal && feitoContinuacao;
-    itens.push({ aulaExercicioId: atual.id, concluido });
-  }
-  return {
-    itens,
-    todosConcluidos: itens.length > 0 && itens.every((i) => i.concluido),
-    algumaExecucao: (execs ?? []).length > 0,
-  };
+  return calcularStatusExercicios(exercicios, contagem);
 }
 
 export async function getStatusExerciciosAulaHoje(alunoId: string, aulaId: string) {
