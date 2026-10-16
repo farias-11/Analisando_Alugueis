@@ -274,13 +274,35 @@ export async function getUltimaMarca(
   exercicioId: string
 ): Promise<{ carga: number | null; repeticoes: number | null } | null> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("execucoes")
-    .select("carga, repeticoes, aula_exercicios!inner(exercicio_id)")
-    .eq("aluno_id", alunoId)
-    .eq("aula_exercicios.exercicio_id", exercicioId);
+  const [{ data }, { data: manual }] = await Promise.all([
+    supabase
+      .from("execucoes")
+      .select("carga, repeticoes, aula_exercicios!inner(exercicio_id)")
+      .eq("aluno_id", alunoId)
+      .eq("aula_exercicios.exercicio_id", exercicioId),
+    // máximo anotado à mão pelo personal (aluno que já treinava antes do app)
+    // — só alimenta esta etiqueta, nunca entra em gráfico/histórico/aderência
+    supabase
+      .from("marcas_maximas")
+      .select("carga, repeticoes")
+      .eq("aluno_id", alunoId)
+      .eq("exercicio_id", exercicioId)
+      .maybeSingle(),
+  ]);
 
-  if (!data || data.length === 0) return null;
+  const melhorReal = melhorMarcaDasExecucoes(data ?? []);
+  if (!manual) return melhorReal;
+  const marcaManual = { carga: Number(manual.carga), repeticoes: manual.repeticoes };
+  // vale a maior carga — o registro manual só aparece enquanto o aluno não
+  // superar ele treinando de verdade
+  if (!melhorReal || melhorReal.carga === null || marcaManual.carga > melhorReal.carga) return marcaManual;
+  return melhorReal;
+}
+
+function melhorMarcaDasExecucoes(
+  data: { carga: number | null; repeticoes: number | null }[]
+): { carga: number | null; repeticoes: number | null } | null {
+  if (data.length === 0) return null;
 
   // A marca tem que vir de UMA série que realmente aconteceu — pegar a maior
   // carga e a maior repetição de séries DIFERENTES (como era antes) inventa
