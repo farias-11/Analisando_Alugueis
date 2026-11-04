@@ -14,6 +14,9 @@ export interface RegistroPendente {
   serieNumero: number;
   carga: number | null;
   repeticoes: number | null;
+  /** só cardio: tempo (min) e pace em vez de carga/repetições */
+  duracaoMin?: number | null;
+  pace?: string | null;
   todasAsSeries?: { totalSeries: number };
   criadoEm: number;
 }

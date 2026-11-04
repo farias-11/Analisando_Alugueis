@@ -19,8 +19,22 @@ function rotuloMes(dia: string) {
 /** Resume as séries de um exercício numa sessão: quando carga e reps se
  * repetem (o caso comum), vira "4×8 · 30kg" em vez de listar série por série —
  * só cai pro detalhe quando alguma série realmente variou. */
-function resumoSeries(series: { carga: number | null; repeticoes: number | null; serie: number }[]) {
+type SerieRegistrada = {
+  carga: number | null;
+  repeticoes: number | null;
+  serie: number;
+  duracaoMin?: number | null;
+  pace?: string | null;
+};
+
+function resumoSeries(series: SerieRegistrada[]) {
   const ordenadas = series.slice().sort((a, b) => a.serie - b.serie);
+  // cardio: tempo e pace no lugar de carga/repetições
+  if (ordenadas.some((s) => s.duracaoMin != null || s.pace)) {
+    return ordenadas
+      .map((s) => `${s.duracaoMin ?? "—"} min${s.pace ? ` · pace ${s.pace}` : ""}`)
+      .join(", ");
+  }
   const cargas = new Set(ordenadas.map((s) => s.carga));
   const reps = new Set(ordenadas.map((s) => s.repeticoes));
   if (cargas.size === 1 && reps.size === 1) {
@@ -36,6 +50,8 @@ type LinhaExecucao = {
   carga: number | null;
   repeticoes: number | null;
   serie_numero: number;
+  duracao_min?: number | null;
+  pace?: string | null;
   aula_exercicios: { aula_id: string; aulas: { nome: string } | null; exercicios: { nome: string } | null } | null;
 };
 
@@ -44,22 +60,26 @@ interface Sessao {
   aulaId: string;
   aulaNome: string;
   dia: string;
-  exercicios: Map<string, { carga: number | null; repeticoes: number | null; serie: number }[]>;
+  exercicios: Map<string, SerieRegistrada[]>;
   cargas: number[];
 }
 
 export async function HistoricoTab({ alunoId }: { alunoId: string }) {
   const supabase = await createClient();
-  const [{ data: ciclos }, { data: execucoes }, resumo] = await Promise.all([
-    supabase.from("ciclos").select("*").eq("aluno_id", alunoId).order("data_inicio", { ascending: false }),
+  const buscarExecucoes = (colunas: string) =>
     supabase
       .from("execucoes")
-      .select("data, carga, repeticoes, serie_numero, aula_exercicios(aula_id, aulas(nome), exercicios(nome))")
+      .select(`${colunas}, aula_exercicios(aula_id, aulas(nome), exercicios(nome))`)
       .eq("aluno_id", alunoId)
       .order("data", { ascending: false })
-      .limit(300),
+      .limit(300);
+  const [{ data: ciclos }, comCardio, resumo] = await Promise.all([
+    supabase.from("ciclos").select("*").eq("aluno_id", alunoId).order("data_inicio", { ascending: false }),
+    buscarExecucoes("data, carga, repeticoes, serie_numero, duracao_min, pace"),
     getResumoEvolucao(alunoId),
   ]);
+  // colunas de cardio (migration 014) ainda não existem → busca sem elas
+  const execucoes = comCardio.error ? (await buscarExecucoes("data, carga, repeticoes, serie_numero")).data : comCardio.data;
   const insight = gerarInsightEvolucao(resumo);
 
   const linhas = (execucoes ?? []) as unknown as LinhaExecucao[];
@@ -83,7 +103,13 @@ export async function HistoricoTab({ alunoId }: { alunoId: string }) {
       cargas: [],
     };
     const lista = sessao.exercicios.get(exercicioNome) ?? [];
-    lista.push({ carga: l.carga, repeticoes: l.repeticoes, serie: l.serie_numero });
+    lista.push({
+      carga: l.carga,
+      repeticoes: l.repeticoes,
+      serie: l.serie_numero,
+      duracaoMin: l.duracao_min != null ? Number(l.duracao_min) : null,
+      pace: l.pace ?? null,
+    });
     sessao.exercicios.set(exercicioNome, lista);
     if (l.carga !== null) sessao.cargas.push(l.carga);
     sessoesPorChave.set(chave, sessao);

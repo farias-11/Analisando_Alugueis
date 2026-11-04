@@ -34,21 +34,30 @@ export async function registrarSerie(input: {
   serieNumero: number;
   carga: number | null;
   repeticoes: number | null;
+  /** só cardio: tempo (min) e pace no lugar de carga/repetições */
+  duracaoMin?: number | null;
+  pace?: string | null;
 }) {
   const { aluno } = await requireAluno();
   const supabase = await createClient();
   await assertAulaExercicioDoAluno(supabase, aluno.id, input.aulaExercicioId);
 
-  await supabase.from("execucoes").upsert(
+  const ehCardio = input.duracaoMin !== undefined || input.pace !== undefined;
+  const { error } = await supabase.from("execucoes").upsert(
     {
       aula_exercicio_id: input.aulaExercicioId,
       aluno_id: aluno.id,
       serie_numero: input.serieNumero,
       carga: input.carga,
       repeticoes: input.repeticoes,
+      // só manda as colunas de cardio quando é cardio — força continua
+      // funcionando mesmo antes da migration 014 chegar no banco
+      ...(ehCardio ? { duracao_min: input.duracaoMin ?? null, pace: input.pace?.trim() || null } : {}),
     },
     { onConflict: "aula_exercicio_id,aluno_id,serie_numero,dia" }
   );
+  // cardio falhando não pode parecer salvo (o aluno digitou tempo/pace à toa)
+  if (error && ehCardio) throw new Error("Não foi possível salvar o cardio.");
 
   revalidatePath(`/treino/${input.aulaId}/exercicio/${input.aulaExercicioId}`);
 }

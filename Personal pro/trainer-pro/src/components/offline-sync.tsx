@@ -33,6 +33,8 @@ export function OfflineSync() {
               serieNumero: item.serieNumero,
               carga: item.carga,
               repeticoes: item.repeticoes,
+              duracaoMin: item.duracaoMin,
+              pace: item.pace,
             });
           }
           removerDaFila(item.id);

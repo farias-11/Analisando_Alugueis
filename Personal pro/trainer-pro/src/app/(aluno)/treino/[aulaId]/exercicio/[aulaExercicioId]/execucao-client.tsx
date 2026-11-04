@@ -14,7 +14,13 @@ import { CheckCircle2, ChevronRight, ExternalLink, Flame, HeartCrack, Link2, Pla
 import type { AulaExercicio, Aula, Exercicio, ExercicioMidia } from "@/lib/types";
 
 type Registro = AulaExercicio & { exercicio: Exercicio & { midias: ExercicioMidia[] }; aula: Aula };
-type ValorSerie = { carga: number | null; repeticoes: number | null };
+type ValorSerie = {
+  carga: number | null;
+  repeticoes: number | null;
+  /** só cardio: tempo (min) e pace no lugar de carga/repetições */
+  duracaoMin?: number | null;
+  pace?: string | null;
+};
 type Marca = { carga: number | null; repeticoes: number | null } | null | undefined;
 
 const TABS = ["Geral", "Instruções", "Alvo", "Carga Máx."] as const;
@@ -120,7 +126,15 @@ function MarcaMaxima({ marca }: { marca: Marca }) {
  * recorde histórico do MarcaMaxima) — senão parece que o app "marcou errado"
  * quando na verdade é só o Máx. de uma sessão anterior aparecendo do lado. */
 function ValorFeito({ valor }: { valor: ValorSerie | undefined }) {
-  if (!valor || (valor.carga === null && valor.repeticoes === null)) return null;
+  if (!valor) return null;
+  if (valor.duracaoMin != null || valor.pace) {
+    return (
+      <span className="shrink-0 rounded-pill border border-success/40 bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success">
+        Feito: {valor.duracaoMin ?? "—"} min{valor.pace ? ` · pace ${valor.pace}` : ""}
+      </span>
+    );
+  }
+  if (valor.carga === null && valor.repeticoes === null) return null;
   return (
     <span className="shrink-0 rounded-pill border border-success/40 bg-success-soft px-2 py-0.5 text-[11px] font-semibold text-success">
       Feito: {valor.carga ?? "—"}kg x {valor.repeticoes ?? "—"} reps
@@ -226,6 +240,11 @@ export function ExecucaoClient({
     String(valorAtualParceiro?.repeticoes ?? (parceiro ? primeiroNumeroDaFaixa(parceiro.repeticoes) : ""))
   );
   const [cargaParceiro, setCargaParceiro] = useState(String(valorAtualParceiro?.carga ?? parceiro?.carga_inicial ?? ""));
+  // cardio: tempo (min) e pace no lugar de carga/repetições
+  const [duracaoCardio, setDuracaoCardio] = useState(
+    String(valoresPorSerie[1]?.duracaoMin ?? aulaExercicio.duracao_min ?? "")
+  );
+  const [paceCardio, setPaceCardio] = useState(valoresPorSerie[1]?.pace ?? "");
   const [pending, startTransition] = useTransition();
   const [descansoAberto, setDescansoAberto] = useState(false);
   const [pendentesOffline, setPendentesOffline] = useState(0);
@@ -274,6 +293,38 @@ export function ExecucaoClient({
   const embedUrl = useMemo(() => videoEmbedUrl(exercicioDoVideo.youtube_url), [exercicioDoVideo.youtube_url]);
   const plataformaVideo = useMemo(() => videoPlataforma(exercicioDoVideo.youtube_url), [exercicioDoVideo.youtube_url]);
   const primeiraMidiaUpload = exercicioDoVideo.midias?.[0];
+
+  function salvarCardio() {
+    const duracaoMin = parseDecimalBR(duracaoCardio);
+    const pace = paceCardio.trim() || null;
+    startTransition(async () => {
+      try {
+        if (!navigator.onLine) throw new Error("offline");
+        await registrarSerie({
+          aulaExercicioId: aulaExercicio.id,
+          aulaId,
+          serieNumero: 1,
+          carga: null,
+          repeticoes: null,
+          duracaoMin,
+          pace,
+        });
+        router.refresh();
+      } catch {
+        enfileirarExecucao({
+          aulaExercicioId: aulaExercicio.id,
+          aulaId,
+          serieNumero: 1,
+          carga: null,
+          repeticoes: null,
+          duracaoMin,
+          pace,
+        });
+        setPendentesOffline(obterFila().length);
+      }
+      setValoresPorSerie({ ...valoresPorSerie, 1: { carga: null, repeticoes: null, duracaoMin, pace } });
+    });
+  }
 
   function salvarSerie() {
     const cargaNum = parseDecimalBR(carga);
@@ -530,7 +581,7 @@ export function ExecucaoClient({
 
 
       <div className="flex gap-1 overflow-x-auto border-b border-border">
-        {TABS.map((t) => (
+        {TABS.filter((t) => aulaExercicio.tipo !== "cardio" || t !== "Carga Máx.").map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -571,8 +622,35 @@ export function ExecucaoClient({
 
       {aulaExercicio.tipo === "cardio" ? (
         <>
-          <Button onClick={salvarSerie} disabled={pending || todasAsSeriesFeitas} className="w-full">
-            {todasAsSeriesFeitas ? "Concluído ✓" : "Concluir exercício"}
+          <p className="flex items-center justify-between gap-2 text-xs font-semibold text-foreground">
+            {aulaExercicio.exercicio.nome}
+            {todasAsSeriesFeitas && <ValorFeito valor={valoresPorSerie[1]} />}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Tempo (min)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={duracaoCardio}
+                onChange={(e) => setDuracaoCardio(e.target.value)}
+                className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs font-medium text-muted">Pace (min/km)</label>
+              <input
+                type="text"
+                inputMode="text"
+                placeholder="ex: 12:00"
+                value={paceCardio}
+                onChange={(e) => setPaceCardio(e.target.value)}
+                className="h-11 w-full rounded-xl border border-border px-3 text-center text-lg font-semibold"
+              />
+            </div>
+          </div>
+          <Button onClick={salvarCardio} disabled={pending} className="w-full">
+            {todasAsSeriesFeitas ? "Atualizar ✓" : "Concluir exercício"}
           </Button>
           {todasAsSeriesFeitas && (
             <>

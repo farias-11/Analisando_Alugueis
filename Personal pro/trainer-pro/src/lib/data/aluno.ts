@@ -332,20 +332,42 @@ function melhorMarcaDasExecucoes(
 export async function getExecucoesDeHoje(
   alunoId: string,
   aulaExercicioId: string
-): Promise<Record<number, { carga: number | null; repeticoes: number | null }>> {
+): Promise<
+  Record<number, { carga: number | null; repeticoes: number | null; duracaoMin?: number | null; pace?: string | null }>
+> {
   const supabase = await createClient();
   const hojeInicio = inicioDoDiaBrasil();
 
-  const { data } = await supabase
-    .from("execucoes")
-    .select("serie_numero, carga, repeticoes")
-    .eq("aluno_id", alunoId)
-    .eq("aula_exercicio_id", aulaExercicioId)
-    .gte("data", hojeInicio.toISOString());
+  type Linha = {
+    serie_numero: number;
+    carga: number | null;
+    repeticoes: number | null;
+    duracao_min?: number | null;
+    pace?: string | null;
+  };
+  const consulta = (colunas: string) =>
+    supabase
+      .from("execucoes")
+      .select(colunas)
+      .eq("aluno_id", alunoId)
+      .eq("aula_exercicio_id", aulaExercicioId)
+      .gte("data", hojeInicio.toISOString());
 
-  const porSerie: Record<number, { carga: number | null; repeticoes: number | null }> = {};
-  for (const row of data ?? []) {
-    porSerie[row.serie_numero] = { carga: row.carga, repeticoes: row.repeticoes };
+  const completa = await consulta("serie_numero, carga, repeticoes, duracao_min, pace");
+  // colunas de cardio (migration 014) ainda não existem no banco → refaz sem elas
+  const data = completa.error ? (await consulta("serie_numero, carga, repeticoes")).data : completa.data;
+
+  const porSerie: Record<
+    number,
+    { carga: number | null; repeticoes: number | null; duracaoMin?: number | null; pace?: string | null }
+  > = {};
+  for (const row of (data ?? []) as unknown as Linha[]) {
+    porSerie[row.serie_numero] = {
+      carga: row.carga,
+      repeticoes: row.repeticoes,
+      duracaoMin: row.duracao_min != null ? Number(row.duracao_min) : null,
+      pace: row.pace ?? null,
+    };
   }
   return porSerie;
 }
